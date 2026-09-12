@@ -1,0 +1,59 @@
+---
+- name: Bootstrap homelab LXC
+  hosts: all
+  become: false
+  gather_facts: true
+
+  vars:
+    homelab_dir: /opt/homelab
+
+  tasks:
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade installed packages
+      ansible.builtin.apt:
+        upgrade: dist
+
+    - name: Install common packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - jq
+          - unzip
+          - vim
+          - htop
+          - net-tools
+          - dnsutils
+          - openssh-server
+        state: present
+
+    - name: Set timezone
+      community.general.timezone:
+        name: Asia/Kolkata
+
+    - name: Create homelab directory
+      ansible.builtin.file:
+        path: "{{ homelab_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure SSH service is enabled
+      ansible.builtin.service:
+        name: ssh
+        enabled: true
+        state: started
+
+    - name: Display bootstrap information
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "IP: {{ ansible_default_ipv4.address }}"
