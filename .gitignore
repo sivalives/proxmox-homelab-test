@@ -1,0 +1,30 @@
+# Never commit secrets
+**/.env
+**/.env.local
+**/.env.production
+**/secrets/
+**/*.key
+**/*.pem
+**/*.crt
+**/*.p12
+
+# Never commit data volumes
+**/data/
+**/logs/
+**/db/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Keep folder structure
+!**/.gitkeep
+!**/.env.example
+
+#Ignore terraform state files
+.terraform/
+.terraform*
+secret.tfvars
+*.secret.tfvars
