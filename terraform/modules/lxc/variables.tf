@@ -98,8 +98,9 @@ variable "timezone" {
   default = "Asia/Kolkata"
 }
 
+# controller runs under ansible user, under new LXC we will use root
 variable "controller_ssh_public_key_file" {
-  type    = string
-  default = "/root/.ssh/id_ed25519_homelab.pub"
-  description = "Controller ssh public key, so that controller can use its private key and login any of LXC controller creates"
+  description = "Controller SSH public key used to access provisioned LXCs"
+  type        = string
+  default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
