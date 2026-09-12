@@ -38,11 +38,12 @@
           ports:
             - "{{ dockge_port }}:5001"
           environment:
-            - DOCKGE_STACKS_DIR=/opt/stacks
+            DOCKGE_STACKS_DIR: {{ stacks_dir }}
           volumes:
             - /var/run/docker.sock:/var/run/docker.sock
             - {{ dockge_data_dir }}:/app/data
-            - {{ stacks_dir }}:/opt/stacks
+            - {{ stacks_dir }}:{{ stacks_dir }}
+            - {{ homelab_root }}:{{ homelab_root }}
 
 - name: Pull Dockge image
   ansible.builtin.command:
