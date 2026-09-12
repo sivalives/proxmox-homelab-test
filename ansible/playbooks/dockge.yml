@@ -1,0 +1,8 @@
+---
+- name: Install Dockge on all Docker hosts
+  hosts: docker_hosts
+  become: false
+  gather_facts: false
+
+  roles:
+    - dockge

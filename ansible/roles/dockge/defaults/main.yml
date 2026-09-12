@@ -1,0 +1,8 @@
+---
+dockge_container_name: dockge
+dockge_image: louislam/dockge:1
+dockge_port: 5001
+
+homelab_root: /opt/homelab
+dockge_data_dir: "{{ homelab_root }}/dockge"
+stacks_dir: "{{ homelab_root }}/stacks"
