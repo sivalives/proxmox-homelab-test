@@ -1,0 +1,5 @@
+# tfvars is basically used to assign values to variables defined in variables.tf 
+# Do no check in this file to github
+proxmox_node = "proxmox"
+proxmox_endpoint  = "https://192.168.1.100:8006/api2/json"
+proxmox_api_token =  "root@pam!root=<REPLACEME>"
