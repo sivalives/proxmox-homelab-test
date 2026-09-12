@@ -43,7 +43,6 @@
             - /var/run/docker.sock:/var/run/docker.sock
             - {{ dockge_data_dir }}:/app/data
             - {{ stacks_dir }}:{{ stacks_dir }}
-            - {{ homelab_root }}:{{ homelab_root }}
 
 - name: Pull Dockge image
   ansible.builtin.command:
