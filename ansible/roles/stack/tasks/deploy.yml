@@ -12,14 +12,14 @@
     owner: root
     group: root
     mode: "0755"
-
-- name: Copy Compose file
+    
+- name: Copy Compose project
   ansible.builtin.copy:
-    src: "{{ compose_file.path }}"
-    dest: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}/compose.yml"
+    src: "{{ stack_service_dir }}/"
+    dest: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}/"
     owner: root
     group: root
-    mode: "0644"
+    mode: preserve
 
 - name: Start Compose project
   ansible.builtin.command:
