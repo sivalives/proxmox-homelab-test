@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Docker
-  hosts: docker
+  hosts: docker_hosts
   become: false
   gather_facts: true
 
