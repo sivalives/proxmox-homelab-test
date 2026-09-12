@@ -37,6 +37,8 @@
           restart: unless-stopped
           ports:
             - "{{ dockge_port }}:5001"
+          environment:
+            - DOCKGE_STACKS_DIR=/opt/stacks
           volumes:
             - /var/run/docker.sock:/var/run/docker.sock
             - {{ dockge_data_dir }}:/app/data
