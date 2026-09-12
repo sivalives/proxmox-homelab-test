@@ -1,0 +1,45 @@
+---
+#Called by the main.yml ( see last task in main.yml) to deploy each compose project found under the stack group directory
+- name: Determine service directory
+  ansible.builtin.set_fact:
+    stack_service_dir: "{{ compose_file.path | dirname }}"
+    stack_service_name: "{{ compose_file.path | dirname | basename }}"
+
+- name: Create service directory
+  ansible.builtin.file:
+    path: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy Compose file
+  ansible.builtin.copy:
+    src: "{{ compose_file.path }}"
+    dest: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Compose project
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}"
+  register: compose_up
+  changed_when: >
+    'Created' in compose_up.stdout or
+    'Started' in compose_up.stdout or
+    'Recreated' in compose_up.stdout
+
+- name: Show Compose project status
+  ansible.builtin.command:
+    cmd: docker compose ps
+    chdir: "{{ stacks_root }}/{{ stack_group }}/{{ stack_service_name }}"
+  register: compose_status
+  changed_when: false
+
+- name: Display Compose project status
+  ansible.builtin.debug:
+    msg:
+      - "Service: {{ stack_group }}/{{ stack_service_name }}"
+      - "{{ compose_status.stdout }}"

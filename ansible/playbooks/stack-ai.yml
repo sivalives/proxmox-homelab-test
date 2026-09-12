@@ -1,0 +1,9 @@
+---
+- name: Deploy AI stacks
+  hosts: ai_hosts
+  become: false
+  gather_facts: false
+
+  roles:
+    - role: stack
+      stack_group: ai

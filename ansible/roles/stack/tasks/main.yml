@@ -1,0 +1,38 @@
+---
+- name: Validate stack group
+  ansible.builtin.assert:
+    that:
+      - stack_group | length > 0
+    fail_msg: "stack_group must be provided"
+
+- name: Find Compose projects
+  ansible.builtin.find:
+    paths: "{{ stack_source_root }}/{{ stack_group }}"
+    patterns:
+      - compose.yml
+    recurse: true
+    file_type: file
+  delegate_to: localhost
+  become: false
+  register: compose_files
+
+- name: Assert Compose projects exist
+  ansible.builtin.assert:
+    that:
+      - compose_files.files | length > 0
+    fail_msg: "No compose.yml files found under {{ stack_source_root }}/{{ stack_group }}"
+
+- name: Create stack group directory
+  ansible.builtin.file:
+    path: "{{ stacks_root }}/{{ stack_group }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+#This calls the deploy.yml task for each compose project found under the stack group directory
+- name: Deploy Compose projects
+  ansible.builtin.include_tasks: deploy.yml
+  loop: "{{ compose_files.files }}"
+  loop_control:
+    loop_var: compose_file

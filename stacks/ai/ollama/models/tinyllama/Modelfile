@@ -1,0 +1,4 @@
+FROM tinyllama:latest
+
+PARAMETER num_ctx 2048
+PARAMETER num_thread 8

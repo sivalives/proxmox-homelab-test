@@ -9,3 +9,9 @@ ansible-docker:
 
 ansible-dockge:
 	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/dockge.yml
+
+#call this way -> make stack GROUP=ai
+stack:
+	ANSIBLE_CONFIG=ansible/ansible.cfg \
+	ansible-playbook ansible/playbooks/stack.yml \
+	-e stack_group=$(GROUP)

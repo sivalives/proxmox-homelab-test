@@ -1,0 +1,4 @@
+---
+stacks_root: /opt/homelab/stacks
+stack_group: ""
+stack_source_root: "{{ playbook_dir }}/../../stacks"

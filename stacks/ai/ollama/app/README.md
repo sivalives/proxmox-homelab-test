@@ -1,0 +1,1 @@
+This app folder is first step how ollama can do chats, how ollama can call tools . From this step go to the MCP setup
