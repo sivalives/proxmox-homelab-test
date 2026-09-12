@@ -1,0 +1,7 @@
+- name: Deploy homelab stack group
+  hosts: "{{ stack_group }}_hosts"
+  become: false
+  gather_facts: false
+
+  roles:
+    - role: stack
