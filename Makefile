@@ -2,7 +2,7 @@
 ANSIBLE_CONFIG := ansible/ansible.cfg
 
 ansible-bootstrap:
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/bootstrap.yml
+	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/lxc-bootstrap.yml
 
 ansible-docker:
 	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/docker.yml
