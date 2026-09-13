@@ -9,7 +9,10 @@
   ansible.builtin.find:
     paths: "{{ stack_source_root }}/{{ stack_group }}"
     patterns:
-      - compose.yml
+      - "compose.yml"
+      - "compose.yaml"
+      - "docker-compose.yml"
+      - "docker-compose.yaml"
     recurse: true
     file_type: file
   delegate_to: localhost
