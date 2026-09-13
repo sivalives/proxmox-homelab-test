@@ -18,3 +18,10 @@ unprivileged = false
 start_on_boot = true
 startup_order = 1
 startup_delay = 30
+mount_points = [
+  {
+    storage = "local-lvm"
+    size_gb = 50
+    mount   = "/opt/ai-data"
+  }
+]

@@ -1,0 +1,35 @@
+services:
+  splunk:
+    image: splunk/splunk:9.4.12
+    container_name: splunk
+    hostname: splunk
+    restart: unless-stopped
+    volumes:
+      - ./data:/opt/splunk/var
+      - ./apps:/opt/splunk/etc/apps
+    ports:
+      - "8000:8000"
+      - "8088:8088"
+      - "9997:9997"
+      - "8089:8089"
+    environment:
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_GENERAL_TERMS: "--accept-sgt-current-at-splunk-com"
+      SPLUNK_PASSWORD: "${SPLUNK_PASSWORD}"
+      SPLUNK_HEC_TOKEN: "${SPLUNK_HEC_TOKEN}"
+      SPLUNK_HEC_SSL: "false"
+      TZ: "Asia/Kolkata"
+    logging:
+      driver: splunk
+      options:
+        splunk-url: "${SPLUNK_HEC_URL}"
+        splunk-token: "${SPLUNK_HEC_TOKEN}"
+        splunk-index: "docker_logs"
+        splunk-sourcetype: "splunk"
+        splunk-verify-connection: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s

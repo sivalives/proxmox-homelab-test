@@ -1,0 +1,36 @@
+services:
+  openbao-agent-init:
+    image: openbao/openbao:2.6.1
+    container_name: openbao-agent-init
+    user: "0:0"
+    volumes:
+      - ./rendered:/openbao-agent/rendered
+      - ./bootstrap:/openbao-agent/bootstrap
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /openbao-agent/rendered
+        mkdir -p /openbao-agent/bootstrap
+        chown -R 100:1000 /openbao-agent/rendered
+        chown -R 100:1000 /openbao-agent/bootstrap
+        chmod 700 /openbao-agent/rendered
+        chmod 700 /openbao-agent/bootstrap
+        find /openbao-agent/bootstrap -type f -exec chmod 600 {} \;
+
+  openbao-agent:
+    image: openbao/openbao:2.6.1
+    container_name: openbao-agent
+    restart: unless-stopped
+    depends_on:
+      openbao-agent-init:
+        condition: service_completed_successfully
+    user: "100:1000"
+    volumes:
+      - ./config:/openbao-agent/config:ro
+      - ./templates:/openbao-agent/templates:ro
+      - ./bootstrap:/openbao-agent/bootstrap:rw
+      - ./rendered:/openbao-agent/rendered:rw
+    command:
+      - agent
+      - -config=/openbao-agent/config/agent.hcl

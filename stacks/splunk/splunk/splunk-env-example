@@ -1,0 +1,17 @@
+# =================================================================
+# LXC 102 — Splunk
+# /opt/stacks/splunk/.env.example
+# IN GIT -- template only, no real secrets
+# =================================================================
+
+#Moved to vault-agent rendered/vault.env
+
+# Splunk admin password (min 8 chars, must have upper+lower+number)
+#SPLUNK_PASSWORD=changeme_Strong1
+
+# HEC Token — generate a UUID
+# Use: python3 -c "import uuid; print(uuid.uuid4())"
+#SPLUNK_HEC_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Used by other LXCs to send logs here
+#SPLUNK_HEC_URL=http://192.168.1.102:8088
