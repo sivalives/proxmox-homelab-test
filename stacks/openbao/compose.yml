@@ -1,0 +1,34 @@
+services:
+  openbao:
+    image: openbao/openbao:2.6.1
+    container_name: openbao
+    restart: unless-stopped
+
+    ports:
+      - "8200:8200"
+      - "8201:8201"    # ← Add cluster port
+
+    volumes:
+      - ./config:/openbao/config
+      - ./data:/openbao/data
+      - ./policies:/openbao/policies:ro
+
+    command:
+      - server
+      - -config=/openbao/config/openbao.hcl
+
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://127.0.0.1:8200/v1/sys/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
