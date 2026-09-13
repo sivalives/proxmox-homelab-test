@@ -1,41 +1,26 @@
-# This is root , where it uses modules and calls for each lxc
-
 module "ai" {
-
-  source = "./modules/lxc"
-  proxmox_node = var.proxmox_node
-
-  vmid        = 105
-  hostname    = "ai"
-  description = "AI - Ollama, Open WebUI, Dockge"
-
-  ip_address  = "192.168.1.105/24"
-  gateway     = "192.168.1.1"
-  dns_servers = ["1.1.1.1", "8.8.8.8"]
-
-  cores     = 8
-  memory_mb = 12288
-  swap_mb   = 2048
-  disk_gb   = 80
-
-  storage  = "local-lvm"
-  bridge   = "vmbr0"
-  template = "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
-
-  nesting      = true
-  unprivileged  = false
-  start_on_boot = true
-
-  startup_order = 1
-  startup_delay = 30
-
-  # Create persistent docker data mounts - terraform destroy wont delete them
-  mount_points = [
-    {
-      storage = "local-lvm"
-      size_gb = 50
-      mount   = "/opt/ai-data"
-    }
-  ] 
-
+  source = "../../shared/modules/lxc"
+  
+  proxmox_node               = var.proxmox_node
+  vmid                       = var.vmid
+  hostname                   = var.hostname
+  description                = var.description
+  ip_address                 = var.ip_address
+  gateway                    = var.gateway
+  dns_servers                = var.dns_servers
+  memory_mb                  = var.memory_mb
+  swap_mb                    = var.swap_mb
+  cores                      = var.cores
+  disk_gb                    = var.disk_gb
+  storage                    = var.storage
+  bridge                     = var.bridge
+  template                   = var.template
+  nesting                    = var.nesting
+  unprivileged               = var.unprivileged
+  start_on_boot              = var.start_on_boot
+  startup_order              = var.startup_order
+  startup_delay              = var.startup_delay
+  timezone                   = var.timezone
+  controller_ssh_public_key_file = var.controller_ssh_public_key_file
+  mount_points               = var.mount_points
 }

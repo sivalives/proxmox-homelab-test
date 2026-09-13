@@ -1,3 +1,7 @@
+# terraform/shared/modules/lxc/variables.tf
+
+# ==================== MODULE VARIABLES ====================
+# (These get passed to shared/modules/lxc)
 
 variable "proxmox_node" {
   description = "Proxmox node name"
@@ -11,6 +15,11 @@ variable "vmid" {
 
 variable "hostname" {
   description = "LXC hostname"
+  type        = string
+}
+
+variable "description" {
+  description = "LXC description"
   type        = string
 }
 
@@ -50,7 +59,7 @@ variable "disk_gb" {
 }
 
 variable "storage" {
-  description = "Proxmox storage"
+  description = "Proxmox storage pool"
   type        = string
 }
 
@@ -64,51 +73,49 @@ variable "template" {
   type        = string
 }
 
-variable "description" {
-  type = string
-}
-
 variable "nesting" {
-  type = bool
+  description = "Enable nesting"
+  type        = bool
 }
 
 variable "unprivileged" {
-  type = bool
+  description = "Unprivileged container"
+  type        = bool
 }
 
 variable "start_on_boot" {
-  type = bool
+  description = "Start on boot"
+  type        = bool
 }
 
 variable "startup_order" {
-  type = number
+  description = "Startup order"
+  type        = number
 }
 
 variable "startup_delay" {
-  type = number
+  description = "Startup delay in seconds"
+  type        = number
 }
-
 
 variable "timezone" {
-  type    = string
-  default = "Asia/Kolkata"
+  description = "Container timezone"
+  type        = string
+  default     = "Asia/Kolkata"
 }
 
-# controller runs under ansible user, under new LXC we will use root
 variable "controller_ssh_public_key_file" {
-  description = "Controller SSH public key used to access provisioned LXCs"
+  description = "Controller SSH public key for LXC access"
   type        = string
   default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
 
 variable "mount_points" {
-  description = "Additional persistent mount points for the LXC"
-
+  description = "Additional persistent mount points"
   type = list(object({
     storage = string
     size_gb = number
     mount   = string
   }))
-
   default = []
 }
