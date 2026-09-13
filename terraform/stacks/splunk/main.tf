@@ -1,4 +1,4 @@
-module "ai" {
+module "splunk" {
   source = "../../shared/modules/lxc"
   
   proxmox_node               = var.proxmox_node
