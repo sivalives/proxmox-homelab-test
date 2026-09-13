@@ -258,17 +258,19 @@ phase_load_policies() {
     for policy_file in "${POLICIES_DIR}"/*.hcl; do
         [[ -f "$policy_file" ]] || continue
 
-        local policy_name
         policy_name="$(basename "$policy_file" .hcl)"
 
-        info "Installing policy: ${policy_name}"
-        docker exec -i -e BAO_ADDR="${OPENBAO_ADDR}" \
-            "${OPENBAO_CONTAINER}" \
-            bao policy write "${policy_name}" - < "$policy_file" >/dev/null
+        info "Installing policy: $policy_name"
 
-        ok "Policy installed: ${policy_name}"
-        ((count++))
-    done
+        docker exec -i \
+            -e BAO_ADDR="$OPENBAO_ADDR" \
+            "$OPENBAO_CONTAINER" \
+            bao policy write "$policy_name" - < "$policy_file"
+
+        ok "Policy installed: $policy_name"
+
+        count=$((count + 1))
+        done
 
     [[ $count -gt 0 ]] || die "No policy files found in ${POLICIES_DIR}"
 

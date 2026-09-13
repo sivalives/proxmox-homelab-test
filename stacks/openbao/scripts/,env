@@ -1,0 +1,9 @@
+Initialize OpenBao? (generates 5 unseal keys, threshold 3) [y/N]: y
+[INFO] Running operator init...
+Unseal Key 1: duoTF6lthmw/TARoMCgC4IF2HkMl9vxTM3QdwCpDnQV5
+Unseal Key 2: 7DhQH2xFm+BS1TxC08khW0OWGvsuPOFPlYlywDLfFVBf
+Unseal Key 3: Mc8tvpGkPIglVP9ptmfhHUtoak2OgA9UWudiISdV0OL/
+Unseal Key 4: dQEClBhegyNtPxwvQpp7MExo+XwEX3iH1YoQOH0aONqp
+Unseal Key 5: ipE3oj4lSFHPexgsbqTtIKmmOGcSr2HJ+5cQ6ThDgRvL
+
+Initial Root Token: s.iFUdJAmrPuqNbiq4S1boFE6v
