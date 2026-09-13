@@ -1,8 +1,11 @@
 # This is root , where it uses modules and calls for each lxc
 
 module "ai" {
+  #Adding this so i can selectively run only AI stack or run all Stacks
+  #Used in Makefile for provisioning stack for AI only 
+  count = var.stack == "all" || var.stack == "ai" ? 1 : 0
+
   source = "./modules/lxc"
-  stack_name = "ai"
   proxmox_node = var.proxmox_node
 
   vmid        = 105

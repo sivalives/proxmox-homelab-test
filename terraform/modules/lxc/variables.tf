@@ -88,10 +88,6 @@ variable "startup_delay" {
   type = number
 }
 
-variable "stack_name" {
-  type    = string
-  default = "myapp"
-}
 
 variable "timezone" {
   type    = string
@@ -115,4 +111,22 @@ variable "mount_points" {
   }))
 
   default = []
+}
+
+#Conditional variable - this helps run the main.tf in root to selectively run for a stack like ai or splunk
+variable "stack" {
+  description = "Stack to deploy. Use 'all' to deploy everything."
+  type        = string
+  default     = "all"
+
+  validation {
+    condition = contains([
+      "all",
+      "ai",
+      "pihole",
+      "splunk"
+    ], var.stack)
+
+    error_message = "stack must be one of: all, ai, pihole, splunk."
+  }
 }

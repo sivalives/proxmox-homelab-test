@@ -1,92 +1,68 @@
-# Ansible configuration
-ANSIBLE_CONFIG := ansible/ansible.cfg
+.PHONY: \
+	terraform-init \
+	terraform-fmt \
+	terraform-validate \
+	terraform-plan \
+	terraform-apply \
+	terraform-output \
+	terraform-destroy \
+	ansible-bootstrap \
+	ansible-docker \
+	ansible-dockge \
+	stack \
+	deploy
 
-# -------------------------
-# Ansible
-# -------------------------
+ANSIBLE_CONFIG := ansible/ansible.cfg
+TF_DIR := terraform
+
+terraform-init:
+	cd $(TF_DIR) && terraform init
+
+terraform-fmt:
+	cd $(TF_DIR) && terraform fmt -recursive
+
+terraform-validate:
+	cd $(TF_DIR) && terraform validate
+
+terraform-plan:
+	cd $(TF_DIR) && terraform plan \
+		-var="stack=$(STACK)"
+
+terraform-apply:
+	cd $(TF_DIR) && terraform apply \
+		-var="stack=$(STACK)"
+
+terraform-output:
+	cd $(TF_DIR) && terraform output
+
+terraform-destroy:
+	cd $(TF_DIR) && terraform destroy \
+		-var="stack=$(STACK)"
 
 ansible-bootstrap:
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/lxc-bootstrap.yml
+	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
+	ansible-playbook ansible/playbooks/lxc-bootstrap.yml \
+		--limit $(STACK)
 
 ansible-docker:
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/docker.yml
+	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
+	ansible-playbook ansible/playbooks/docker.yml \
+		--limit $(STACK)
 
 ansible-dockge:
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) ansible-playbook ansible/playbooks/dockge.yml
+	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
+	ansible-playbook ansible/playbooks/dockge.yml \
+		--limit $(STACK)
 
-# Deploy stack
-# Usage: make stack GROUP=ai
 stack:
 	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
 	ansible-playbook ansible/playbooks/stack.yml \
-	-e stack_group=$(GROUP)
-
-
-# -------------------------
-# Terraform
-# -------------------------
-
-terraform-init:
-	cd terraform && terraform init
-
-terraform-fmt:
-	cd terraform && terraform fmt -recursive
-
-terraform-validate:
-	cd terraform && terraform validate
-
-terraform-plan:
-	cd terraform && terraform plan \
-		-var-file=terraform.tfvars
-
-terraform-apply:
-	cd terraform && terraform apply \
-		-var-file=terraform.tfvars
-
-terraform-output:
-	cd terraform && terraform output
-
-terraform-destroy:
-	cd terraform && terraform destroy \
-		-var-file=terraform.tfvars
-
-.PHONY: deploy
+		-e stack_group=$(STACK)
 
 deploy:
-	@echo "=== Terraform init ==="
-	cd terraform && terraform init
-
-	@echo "=== Terraform format ==="
-	cd terraform && terraform fmt -recursive
-
-	@echo "=== Terraform validate ==="
-	cd terraform && terraform validate
-
-	@echo "=== Terraform plan ==="
-	cd terraform && terraform plan \
-		-var-file=terraform.tfvars
-
-	@echo "=== Terraform apply ==="
-	cd terraform && terraform apply \
-		-var-file=terraform.tfvars
-
-	@echo "=== Ansible bootstrap ==="
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
-	ansible-playbook ansible/playbooks/lxc-bootstrap.yml
-
-	@echo "=== Ansible Docker ==="
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
-	ansible-playbook ansible/playbooks/docker.yml
-
-	@echo "=== Ansible Dockge ==="
-	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
-	ansible-playbook ansible/playbooks/dockge.yml
-
-	@if [ -n "$(GROUP)" ]; then \
-		echo "=== Deploying stack: $(GROUP) ==="; \
-		ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
-		ansible-playbook ansible/playbooks/stack.yml \
-		-e stack_group=$(GROUP); \
-	else \
-		echo "No stack group specified. Skipping stack deployment."; \
-	fi
+	@echo "Deploying stack: $(STACK)"
+	$(MAKE) terraform-apply STACK=$(STACK)
+	$(MAKE) ansible-bootstrap STACK=$(STACK)
+	$(MAKE) ansible-docker STACK=$(STACK)
+	$(MAKE) ansible-dockge STACK=$(STACK)
+	$(MAKE) stack STACK=$(STACK)
