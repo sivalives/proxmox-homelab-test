@@ -37,18 +37,18 @@ terraform-validate:
 
 terraform-plan:
 	cd terraform && terraform plan \
-		-var-file=environments/homelab.tfvars
+		-var-file=terraform.tfvars
 
 terraform-apply:
 	cd terraform && terraform apply \
-		-var-file=environments/homelab.tfvars
+		-var-file=terraform.tfvars
 
 terraform-output:
 	cd terraform && terraform output
 
 terraform-destroy:
 	cd terraform && terraform destroy \
-		-var-file=environments/homelab.tfvars
+		-var-file=terraform.tfvars
 
 .PHONY: deploy
 
@@ -64,11 +64,11 @@ deploy:
 
 	@echo "=== Terraform plan ==="
 	cd terraform && terraform plan \
-		-var-file=environments/homelab.tfvars
+		-var-file=terraform.tfvars
 
 	@echo "=== Terraform apply ==="
 	cd terraform && terraform apply \
-		-var-file=environments/homelab.tfvars
+		-var-file=terraform.tfvars
 
 	@echo "=== Ansible bootstrap ==="
 	ANSIBLE_CONFIG=$(ANSIBLE_CONFIG) \
