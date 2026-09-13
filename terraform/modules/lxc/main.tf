@@ -35,20 +35,17 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   disk {
-    datastore_id = var.storage
-    size         = var.disk_gb
-  }
+  datastore_id = var.storage
+  size         = var.disk_gb
+}
 
   dynamic "mount_point" {
     for_each = var.mount_points
 
     content {
-      path = mount_point.value.mount
-
-      volume = {
-        datastore_id = mount_point.value.storage
-        size         = mount_point.value.size_gb
-      }
+      volume = mount_point.value.storage
+      size   = "${mount_point.value.size_gb}G"
+      path   = mount_point.value.mount
     }
   }
 
