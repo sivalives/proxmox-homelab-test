@@ -1,5 +1,6 @@
 # terraform/stacks/ai/terraform.tfvars
 proxmox_node = "proxmox"
+description = "AI LXC"
 vmid         = 105
 hostname     = "ai"
 memory_mb    = 12288
