@@ -104,3 +104,15 @@ variable "controller_ssh_public_key_file" {
   type        = string
   default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
+
+variable "mount_points" {
+  description = "Additional persistent mount points for the LXC"
+
+  type = list(object({
+    storage = string
+    size_gb = number
+    mount   = string
+  }))
+
+  default = []
+}

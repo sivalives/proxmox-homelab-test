@@ -28,4 +28,14 @@ module "ai" {
 
   startup_order = 1
   startup_delay = 30
+
+  # Create persistent docker data mounts - terraform destroy wont delete them
+  mount_points = [
+    {
+      storage = "local-lvm"
+      size_gb = 50
+      mount   = "/opt/ai-data"
+    }
+  ] 
+
 }
