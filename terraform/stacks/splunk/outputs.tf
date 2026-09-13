@@ -1,5 +1,5 @@
 output "splunk" {
-  description = "SPLUNK LXC detsplunkls"
+  description = "SPLUNK LXC"
 
   value = {
     vmid         = module.splunk.lxc_vmid

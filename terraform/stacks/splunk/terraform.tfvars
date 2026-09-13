@@ -1,4 +1,4 @@
-# terraform/stacks/ai/terraform.tfvars
+# terraform/stacks/splunk/terraform.tfvars
 proxmox_node = "proxmox"
 description = "SPLUNK LXC"
 vmid         = 102

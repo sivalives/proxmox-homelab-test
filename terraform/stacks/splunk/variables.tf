@@ -1,4 +1,4 @@
-# terraform/stacks/ai/variables.tf
+# terraform/stacks/splunk/variables.tf
 
 # ==================== PROVIDER VARIABLES ====================
 variable "proxmox_endpoint" {
