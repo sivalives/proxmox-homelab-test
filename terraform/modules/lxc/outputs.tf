@@ -22,3 +22,14 @@ output "lxc_resources" {
     disk_gb   = var.disk_gb
   }
 }
+
+output "lxc_mount_points" {
+  description = "Persistent LXC mount points"
+  value = [
+    for mount in var.mount_points : {
+      mount_path = mount.mount
+      size_gb    = mount.size_gb
+      storage    = mount.storage
+    }
+  ]
+}
