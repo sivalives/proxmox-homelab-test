@@ -14,7 +14,7 @@ STACKS_DIR    := $(TERRAFORM_DIR)/stacks
 # Available stacks:
 #   ai pihole splunk dockership
 #
-STACKS := ai pihole splunk dockership
+STACKS := ai pihole splunk dockership openbao
 
 
 # ============================================================
