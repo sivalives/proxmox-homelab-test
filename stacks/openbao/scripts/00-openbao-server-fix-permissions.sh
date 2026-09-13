@@ -11,7 +11,7 @@
 # /opt/homelab/stacks/openbao/scripts
 #
 # Usage:
-#   bash 00_fix_perms.sh
+#   bash 00-openbao-server-fix-permissions.sh
 # ============================================================
 
 set -euo pipefail
