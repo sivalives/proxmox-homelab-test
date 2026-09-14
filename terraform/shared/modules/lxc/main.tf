@@ -1,5 +1,10 @@
 # shared/modules/lxc/main.tf
-# COMPLETELY FIXED - No count in provisioners
+# FIXED: Extracts IP from CIDR notation, waits for SSH
+
+locals {
+  # Extract IP address from CIDR notation (e.g., 192.168.1.102/24 -> 192.168.1.102)
+  lxc_ip = split("/", var.ip_address)[0]
+}
 
 resource "proxmox_virtual_environment_container" "this" {
   node_name = var.proxmox_node
@@ -77,26 +82,45 @@ resource "proxmox_virtual_environment_container" "this" {
   protection = false
 
   # ============================================================
-  # INSTALL OPENBAO CLIENT (always)
+  # WAIT FOR SSH TO BE READY
   # ============================================================
 
   provisioner "remote-exec" {
     inline = [
-      "apt-get update",
-      "apt-get install -y openbao wget curl"
+      "echo 'Waiting for container to be ready...'",
+      "sleep 5"
     ]
 
     connection {
       type        = "ssh"
       user        = "root"
       private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
+      host        = local.lxc_ip
+      timeout     = "3m"
+    }
+  }
+
+  # ============================================================
+  # INSTALL OPENBAO CLIENT (always)
+  # ============================================================
+
+  provisioner "remote-exec" {
+    inline = [
+      "apt-get update",
+      "apt-get install -y openbao wget curl jq"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = local.lxc_ip
       timeout     = "5m"
     }
   }
 
   # ============================================================
-  # COPY AGENT CONFIG TEMPLATE (always copy, setup conditionally)
+  # COPY AGENT CONFIG TEMPLATE
   # ============================================================
 
   provisioner "file" {
@@ -109,13 +133,13 @@ resource "proxmox_virtual_environment_container" "this" {
       type        = "ssh"
       user        = "root"
       private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
+      host        = local.lxc_ip
       timeout     = "5m"
     }
   }
 
   # ============================================================
-  # COPY CREDENTIALS (always copy, setup conditionally)
+  # COPY CREDENTIALS
   # ============================================================
 
   provisioner "file" {
@@ -126,7 +150,7 @@ resource "proxmox_virtual_environment_container" "this" {
       type        = "ssh"
       user        = "root"
       private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
+      host        = local.lxc_ip
       timeout     = "5m"
     }
   }
@@ -139,39 +163,45 @@ resource "proxmox_virtual_environment_container" "this" {
       type        = "ssh"
       user        = "root"
       private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
+      host        = local.lxc_ip
       timeout     = "5m"
     }
   }
 
   # ============================================================
-  # SETUP OPENBAO AGENT (shell conditionals, NO terraform count)
+  # SETUP OPENBAO AGENT (conditional via shell)
   # ============================================================
 
   provisioner "remote-exec" {
     inline = [
-      # Always create base directories
-      "mkdir -p /var/lib/openbao /var/run/openbao",
+      # Create base directories
+      "mkdir -p /var/lib/openbao /var/run/openbao /etc/openbao",
       "chmod 700 /var/lib/openbao /var/run/openbao",
       "",
-      # Conditionally setup agent based on variable
+      # Check if agent should be enabled
       "if [ '${var.enable_openbao_agent}' = 'true' ]; then",
       "  echo '[INFO] Setting up OpenBao agent'",
       "  ",
       "  # Move files to proper locations",
+      "  if [ ! -f /tmp/openbao-agent.hcl ]; then",
+      "    echo '[ERROR] Agent config not found'",
+      "    exit 1",
+      "  fi",
+      "  ",
       "  mv /tmp/openbao-agent.hcl /etc/openbao/agent.hcl",
       "  mv /tmp/openbao-role-id /var/lib/openbao/role-id",
       "  mv /tmp/openbao-secret-id /var/lib/openbao/secret-id",
       "  ",
       "  # Fix permissions",
-      "  chmod 600 /var/lib/openbao/role-id /var/lib/openbao/secret-id",
+      "  chmod 600 /var/lib/openbao/role-id",
+      "  chmod 600 /var/lib/openbao/secret-id",
       "  chmod 600 /etc/openbao/agent.hcl",
       "  ",
       "  # Create systemd service",
-      "  cat > /etc/systemd/system/openbao-agent.service <<'SYSTEMD_EOF'",
+      "  cat > /etc/systemd/system/openbao-agent.service << 'SYSTEMD_EOF'",
       "[Unit]",
       "Description=OpenBao Agent",
-      "After=network.target",
+      "After=network-online.target",
       "Wants=network-online.target",
       "",
       "[Service]",
@@ -183,6 +213,7 @@ resource "proxmox_virtual_environment_container" "this" {
       "StandardError=journal",
       "User=root",
       "TimeoutStartSec=60",
+      "Environment='BAO_ADDR=http://127.0.0.1:8200'",
       "",
       "[Install]",
       "WantedBy=multi-user.target",
@@ -192,7 +223,18 @@ resource "proxmox_virtual_environment_container" "this" {
       "  systemctl daemon-reload",
       "  systemctl enable openbao-agent.service",
       "  systemctl start openbao-agent.service",
-      "  sleep 2",
+      "  ",
+      "  # Wait for socket",
+      "  echo '[INFO] Waiting for OpenBao agent socket...'",
+      "  for i in {1..30}; do",
+      "    if [ -S /var/run/openbao/agent.sock ]; then",
+      "      echo '[OK] OpenBao agent socket ready'",
+      "      break",
+      "    fi",
+      "    echo \"[INFO] Waiting... ($i/30)\"",
+      "    sleep 2",
+      "  done",
+      "  ",
       "  systemctl status openbao-agent.service",
       "  echo '[OK] OpenBao agent started'",
       "else",
@@ -205,8 +247,8 @@ resource "proxmox_virtual_environment_container" "this" {
       type        = "ssh"
       user        = "root"
       private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
-      timeout     = "5m"
+      host        = local.lxc_ip
+      timeout     = "10m"
     }
   }
 }
