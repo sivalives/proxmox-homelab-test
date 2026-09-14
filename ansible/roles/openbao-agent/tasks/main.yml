@@ -1,6 +1,5 @@
 # ansible/roles/openbao-agent/tasks/main.yml
 ---
----
 - name: Install dependencies
   ansible.builtin.apt:
     name:
