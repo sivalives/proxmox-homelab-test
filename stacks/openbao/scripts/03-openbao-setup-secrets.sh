@@ -26,7 +26,7 @@ KV_MOUNT="secret"
 # ------------------------------------------------------------
 
 SHARED_SECRETS=(
-    "SPLUNK_HEC_URL=http://192.168.1.102:8088/services/collector"
+    "SPLUNK_HEC_URL=http://192.168.1.102:8088"
     "SPLUNK_HEC_TOKEN=CHANGE_ME_SPLUNK_HEC_TOKEN"
 )
 
