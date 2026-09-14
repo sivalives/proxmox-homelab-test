@@ -110,11 +110,20 @@
       stderr: "{{ openbao_stack_secrets.stderr | default('') }}"
   no_log: false
 
-- name: Parse OpenBao secrets
+- name: Parse shared OpenBao secrets
+  ansible.builtin.set_fact:
+    shared_secrets: >-
+      {{
+        openbao_shared_secrets.stdout.data.data
+        | default({})
+      }}
+  no_log: true
+
+- name: Parse stack OpenBao secrets
   ansible.builtin.set_fact:
     app_secrets: >-
       {{
-        (openbao_secrets.stdout | from_json).data.data
+        openbao_stack_secrets.stdout.data.data
         | default({})
       }}
   no_log: true
