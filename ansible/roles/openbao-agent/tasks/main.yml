@@ -14,7 +14,7 @@
 
 - name: Set OpenBao version
   ansible.builtin.set_fact:
-    openbao_version: "2.6.2"          # change this when you want to upgrade
+    openbao_version: "2.6.2"
 
 - name: Create temporary download directory
   ansible.builtin.file:
@@ -24,14 +24,13 @@
 
 - name: Download OpenBao binary
   ansible.builtin.get_url:
-    url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/bao_{{ openbao_version }}_linux_amd64.tar.gz"
-    dest: /tmp/openbao-install/bao.tar.gz
+    url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.tar.gz"
+    dest: /tmp/openbao-install/openbao.tar.gz
     mode: "0644"
-  register: download_result
 
 - name: Extract OpenBao binary
   ansible.builtin.unarchive:
-    src: /tmp/openbao-install/bao.tar.gz
+    src: /tmp/openbao-install/openbao.tar.gz
     dest: /tmp/openbao-install
     remote_src: true
     creates: /tmp/openbao-install/bao
