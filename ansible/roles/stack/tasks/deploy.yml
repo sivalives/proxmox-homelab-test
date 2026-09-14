@@ -138,15 +138,26 @@
     cmd: docker compose up -d
     chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
   register: compose_up
-  changed_when: >
-    'Created' in compose_up.stdout or
-    'Started' in compose_up.stdout or
-    'Recreated' in compose_up.stdout
+  changed_when: compose_up.rc == 0
 
 - name: Show compose up output
   ansible.builtin.debug:
-    msg: "{{ compose_up.stdout_lines }}"
-  when: compose_up.stdout != ""
+    msg: "{{ compose_up.stdout_lines | default([]) }}"
+  when: compose_up.stdout is defined and compose_up.stdout != ""
+
+- name: Fail if Docker Compose deployment failed
+  ansible.builtin.fail:
+    msg: |
+      Docker Compose deployment failed for {{ stack_service_name }}.
+
+      stdout:
+      {{ compose_up.stdout | default('') }}
+
+      stderr:
+      {{ compose_up.stderr | default('') }}
+
+      rc: {{ compose_up.rc | default('unknown') }}
+  when: compose_up.rc != 0
 
 # -------------------------------------------------------------------
 # Status
