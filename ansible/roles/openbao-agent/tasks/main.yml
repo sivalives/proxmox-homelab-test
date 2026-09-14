@@ -80,9 +80,6 @@
     owner: root
     group: root
     mode: "0600"
-  vars:
-    openbao_addr: "{{ openbao_addr }}"
-  when: enable_openbao_agent | bool
 
 - name: Copy OpenBao credentials
   ansible.builtin.copy:
