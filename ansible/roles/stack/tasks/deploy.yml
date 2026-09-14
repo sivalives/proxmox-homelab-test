@@ -50,7 +50,20 @@
 # Fetch secrets
 # -------------------------------------------------------------------
 
-- name: Fetch secrets from OpenBao
+- name: Fetch shared secrets from OpenBao
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/bao kv get
+      -format=json
+      -address={{ openbao_addr }}
+      secret/shared
+  environment:
+    BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
+  register: openbao_shared_secrets
+  changed_when: false
+  no_log: true
+
+- name: Fetch stack secrets from OpenBao
   ansible.builtin.command:
     cmd: >
       /usr/local/bin/bao kv get
@@ -59,8 +72,26 @@
       secret/{{ stack_name }}
   environment:
     BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
-  register: openbao_secrets
+  register: openbao_stack_secrets
   changed_when: false
+  no_log: true
+
+- name: Build shared secrets
+  ansible.builtin.set_fact:
+    shared_secrets: >-
+      {{
+        (openbao_shared_secrets.stdout | from_json).data.data
+        | default({})
+      }}
+  no_log: true
+
+- name: Build stack secrets
+  ansible.builtin.set_fact:
+    app_secrets: >-
+      {{
+        (openbao_stack_secrets.stdout | from_json).data.data
+        | default({})
+      }}
   no_log: true
 
 - name: Parse OpenBao secrets
