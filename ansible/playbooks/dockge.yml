@@ -1,6 +1,6 @@
 ---
 - name: Install Dockge on all Docker hosts
-  hosts: docker_hosts
+  hosts: "{{ stack_name }}"
   become: false
   gather_facts: false
 

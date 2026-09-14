@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap homelab LXC
-  hosts: all
+  hosts: "{{ stack_name }}"
   become: false
   gather_facts: true
 
