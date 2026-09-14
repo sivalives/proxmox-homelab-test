@@ -26,7 +26,7 @@ help:
 	@echo "  bootstrap              One-time: Setup OpenBao + create AppRoles"
 	@echo "  plan STACK=splunk      Plan infrastructure changes"
 	@echo "  apply STACK=splunk     Create/update infrastructure"
-	@echo "  deploy STACK=splunk    Full deployment (Terraform + Ansible)"
+	@echo "  deploy STACK=splunk    Full deployment (Git pull + Terraform + Ansible)"
 	@echo "  destroy STACK=splunk   Destroy infrastructure"
 	@echo "  clean                  Clean Terraform cache"
 	@echo ""
@@ -73,7 +73,11 @@ deploy:
 	@echo "=================================================="
 	@echo ""
 
-	@echo ">>> Step 1/6: Terraform apply"
+	@echo ">>> Step 1/7: Pull latest Git changes"
+	git pull --ff-only
+
+	@echo ""
+	@echo ">>> Step 2/7: Terraform apply"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
 	@echo ""
@@ -81,22 +85,22 @@ deploy:
 	@sleep 10
 
 	@echo ""
-	@echo ">>> Step 2/6: LXC bootstrap"
+	@echo ">>> Step 3/7: LXC bootstrap"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 3/6: Docker setup"
+	@echo ">>> Step 4/7: Docker setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 4/6: Dockge setup"
+	@echo ">>> Step 5/7: Dockge setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockge.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 5/6: OpenBao CLI + credentials"
+	@echo ">>> Step 6/7: OpenBao CLI + credentials"
 
 	@if [ "$(STACK)" = "openbao" ]; then \
 		echo "OpenBao server - skipping client credentials setup"; \
@@ -118,7 +122,7 @@ deploy:
 	fi
 
 	@echo ""
-	@echo ">>> Step 6/6: Deploy stack"
+	@echo ">>> Step 7/7: Deploy stack"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
 		-e stack_name=$(STACK)
 
