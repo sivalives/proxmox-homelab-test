@@ -25,6 +25,11 @@
     cmd: |
       set -o pipefail
 
+      echo "BAO_ADDR=$BAO_ADDR"
+      echo "bao=$(command -v bao)"
+      echo "role-id exists=$(test -s /var/lib/openbao/role-id && echo yes || echo no)"
+      echo "secret-id exists=$(test -s /var/lib/openbao/secret-id && echo yes || echo no)"
+
       ROLE_ID="$(cat /var/lib/openbao/role-id)"
       SECRET_ID="$(cat /var/lib/openbao/secret-id)"
 
@@ -39,7 +44,6 @@
     BAO_ADDR: "{{ openbao_addr }}"
   register: openbao_login
   changed_when: false
-  no_log: true
 
 - name: Verify OpenBao authentication
   ansible.builtin.assert:
