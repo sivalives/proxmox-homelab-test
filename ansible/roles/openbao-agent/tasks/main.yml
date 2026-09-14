@@ -113,6 +113,8 @@
       User=root
       TimeoutStartSec=60
       Environment="BAO_ADDR=http://127.0.0.1:8200"
+      RuntimeDirectory=openbao
+      RuntimeDirectoryMode=0700
 
       [Install]
       WantedBy=multi-user.target
