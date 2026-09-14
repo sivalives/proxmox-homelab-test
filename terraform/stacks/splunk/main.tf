@@ -2,8 +2,8 @@
 # Example stack with OpenBao agent and bootstrap validation
 
 locals {
-  role_id_file   = "${path.module}/../../stacks/openbao/bootstrap/lxc102-splunk/role-id"
-  secret_id_file = "${path.module}/../../stacks/openbao/bootstrap/lxc102-splunk/secret-id"
+  role_id_file   = "${path.module}/../../../stacks/openbao/bootstrap/lxc102-splunk/role-id"
+  secret_id_file = "${path.module}/../../../stacks/openbao/bootstrap/lxc102-splunk/secret-id"
 }
 
 # Validate bootstrap files exist before proceeding
