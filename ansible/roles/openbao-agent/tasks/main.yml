@@ -1,14 +1,37 @@
 # ansible/roles/openbao-agent/tasks/main.yml
 ---
-- name: Install OpenBao client
+- name: Install dependencies for OpenBao repo
   ansible.builtin.apt:
     name:
-      - openbao
       - wget
       - curl
       - jq
+      - gnupg
+      - ca-certificates
     state: present
     update_cache: true
+  become: true
+
+- name: Add OpenBao GPG key
+  ansible.builtin.get_url:
+    url: https://openbao.org/assets/openbao-gpg-pub-20240618.asc
+    dest: /usr/share/keyrings/openbao-archive-keyring.asc
+    mode: '0644'
+  become: true
+
+- name: Add OpenBao repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/openbao-archive-keyring.asc] https://pkgs.openbao.org/deb/ stable main"
+    state: present
+    filename: openbao
+  become: true
+
+- name: Install OpenBao
+  ansible.builtin.apt:
+    name: openbao
+    state: present
+    update_cache: true
+  become: true
 
 - name: Create OpenBao directories
   ansible.builtin.file:
