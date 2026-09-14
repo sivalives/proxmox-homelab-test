@@ -1,5 +1,5 @@
 # shared/modules/lxc/main.tf
-# SIMPLIFIED: No provisioners - Ansible handles all setup
+# EXACT copy of original working code - just removed provisioners
 
 resource "proxmox_virtual_environment_container" "this" {
   node_name = var.proxmox_node
@@ -62,21 +62,17 @@ resource "proxmox_virtual_environment_container" "this" {
     type             = "ubuntu"
   }
 
-  # Features block only for privileged containers
-  # Unprivileged containers with nesting enabled in Proxmox settings
-  dynamic "features" {
-    for_each = var.unprivileged ? [] : [1]
-    content {
-      nesting = true
-    }
+  features {
+    nesting = true
   }
 
-  unprivileged  = var.unprivileged
-  start_on_boot = var.start_on_boot
+  # HARDCODED - exactly as original working version
+  unprivileged  = true
+  start_on_boot = true
 
   startup {
-    order    = var.startup_order
-    up_delay = var.startup_delay
+    order    = 1
+    up_delay = 30
   }
 
   protection = false
