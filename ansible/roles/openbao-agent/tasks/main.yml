@@ -1,37 +1,63 @@
 # ansible/roles/openbao-agent/tasks/main.yml
 ---
-- name: Install dependencies for OpenBao repo
+---
+- name: Install dependencies
   ansible.builtin.apt:
     name:
-      - wget
       - curl
+      - wget
       - jq
-      - gnupg
       - ca-certificates
+      - unzip
     state: present
     update_cache: true
   become: true
 
-- name: Add OpenBao GPG key
+- name: Set OpenBao version
+  ansible.builtin.set_fact:
+    openbao_version: "2.6.2"          # change this when you want to upgrade
+
+- name: Create temporary download directory
+  ansible.builtin.file:
+    path: /tmp/openbao-install
+    state: directory
+    mode: "0755"
+
+- name: Download OpenBao binary
   ansible.builtin.get_url:
-    url: https://openbao.org/assets/openbao-gpg-pub-20240618.asc
-    dest: /usr/share/keyrings/openbao-archive-keyring.asc
-    mode: '0644'
+    url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/bao_{{ openbao_version }}_linux_amd64.tar.gz"
+    dest: /tmp/openbao-install/bao.tar.gz
+    mode: "0644"
+  register: download_result
+
+- name: Extract OpenBao binary
+  ansible.builtin.unarchive:
+    src: /tmp/openbao-install/bao.tar.gz
+    dest: /tmp/openbao-install
+    remote_src: true
+    creates: /tmp/openbao-install/bao
+
+- name: Install OpenBao binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/openbao-install/bao
+    dest: /usr/local/bin/bao
+    mode: "0755"
+    remote_src: true
   become: true
 
-- name: Add OpenBao repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/openbao-archive-keyring.asc] https://pkgs.openbao.org/deb/ stable main"
-    state: present
-    filename: openbao
-  become: true
+- name: Verify OpenBao installation
+  ansible.builtin.command: bao version
+  register: bao_version_output
+  changed_when: false
 
-- name: Install OpenBao
-  ansible.builtin.apt:
-    name: openbao
-    state: present
-    update_cache: true
-  become: true
+- name: Show installed version
+  ansible.builtin.debug:
+    msg: "{{ bao_version_output.stdout }}"
+
+- name: Cleanup temporary files
+  ansible.builtin.file:
+    path: /tmp/openbao-install
+    state: absent
 
 - name: Create OpenBao directories
   ansible.builtin.file:
