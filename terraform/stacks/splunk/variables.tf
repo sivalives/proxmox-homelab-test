@@ -123,6 +123,13 @@ variable "controller_ssh_public_key_file" {
   default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
 
+variable "controller_ssh_private_key_file" {
+  description = "Controller SSH private key for provisioning"
+  type        = string
+  default     = "/home/ansible/.ssh/id_ed25519_homelab"
+  sensitive   = true
+}
+
 variable "mount_points" {
   description = "Additional persistent mount points"
   type = list(object({
