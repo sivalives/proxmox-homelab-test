@@ -112,12 +112,14 @@
 
 - name: Parse shared OpenBao secrets
   ansible.builtin.set_fact:
-    shared_secrets: "{{ openbao_shared_secrets.stdout.data.data }}"
+    shared_secrets: >-
+      {{ (openbao_shared_secrets.stdout | from_json).data.data }}
   no_log: true
 
 - name: Parse stack OpenBao secrets
   ansible.builtin.set_fact:
-    app_secrets: "{{ openbao_stack_secrets.stdout.data.data }}"
+    app_secrets: >-
+      {{ (openbao_stack_secrets.stdout | from_json).data.data }}
   no_log: true
 
 - name: Display fetched secret keys
