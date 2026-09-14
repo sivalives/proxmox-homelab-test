@@ -95,20 +95,17 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   # Create agent config (only if enabled)
-  provisioner "file" {
-    count   = var.enable_openbao_agent ? 1 : 0
-    content = templatefile("${path.module}/openbao-agent.hcl.tpl", {
-      openbao_addr = var.openbao_addr
-    })
-    destination = "/etc/openbao/agent.hcl"
-
-    connection {
-      type        = "ssh"
-      user        = "root"
-      private_key = file(var.controller_ssh_private_key_file)
-      host        = var.ip_address
-      timeout     = "5m"
-    }
+  provisioner "remote-exec" {
+    inline = [
+      "if [ '${var.enable_openbao_agent}' = 'true' ]; then",
+      "  # Setup agent",
+      "  mkdir -p /var/lib/openbao",
+      "  mv /tmp/openbao-agent.hcl /etc/openbao/agent.hcl",
+      "  # ... more setup",
+      "else",
+      "  echo 'Agent not enabled'",
+      "fi"
+    ]
   }
 
   # Copy role-id
