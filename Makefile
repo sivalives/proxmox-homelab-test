@@ -1,260 +1,129 @@
-# ============================================================
-# Homelab Terraform / Ansible Makefile
-# ============================================================
+# Homelab Makefile - Simple Version
 
-SHELL := /bin/bash
+.PHONY: help bootstrap plan apply destroy deploy clean
 
-ANSIBLE_CONFIG := ansible/ansible.cfg
-
-TERRAFORM_DIR := terraform
-STACKS_DIR    := $(TERRAFORM_DIR)/stacks
-STACKS_ROOT   := stacks
-
-# Available Terraform / application stacks
-STACKS := ai pihole splunk dockership openbao
-
-# OpenBao credentials for Splunk
-OPENBAO_BOOTSTRAP_DIR  := $(STACKS_ROOT)/openbao/bootstrap
-SPLUNK_BOOTSTRAP_DIR   := $(OPENBAO_BOOTSTRAP_DIR)/lxc102-splunk
-OPENBAO_ROLE_ID_FILE   := $(SPLUNK_BOOTSTRAP_DIR)/role-id
-OPENBAO_SECRET_ID_FILE := $(SPLUNK_BOOTSTRAP_DIR)/secret-id
-
+# Variables
+STACK ?= 
+TERRAFORM_DIR := terraform/stacks
+BOOTSTRAP_DIR := stacks/openbao/bootstrap
 
 # ============================================================
 # Help
 # ============================================================
 
-.PHONY: help
-
 help:
 	@echo ""
-	@echo "Homelab Terraform / Ansible"
+	@echo "Homelab - Terraform + Ansible + OpenBao"
 	@echo ""
-	@echo "Terraform:"
-	@echo "  make terraform-init GROUP=ai"
-	@echo "  make terraform-fmt"
-	@echo "  make terraform-validate GROUP=ai"
-	@echo "  make terraform-plan GROUP=ai"
-	@echo "  make terraform-apply GROUP=ai"
-	@echo "  make terraform-output GROUP=ai"
-	@echo "  make terraform-destroy GROUP=ai"
+	@echo "Usage: make <target> STACK=<stack_name>"
 	@echo ""
-	@echo "Ansible:"
-	@echo "  make ansible-bootstrap GROUP=ai"
-	@echo "  make ansible-docker GROUP=ai"
-	@echo "  make ansible-dockge GROUP=ai"
+	@echo "Targets:"
+	@echo "  bootstrap              One-time: Setup OpenBao + create AppRoles"
+	@echo "  plan STACK=splunk      Plan infrastructure changes"
+	@echo "  apply STACK=splunk     Create/update infrastructure (Terraform)"
+	@echo "  deploy STACK=splunk    Full deployment (Terraform + Ansible)"
+	@echo "  destroy STACK=splunk   Destroy infrastructure"
+	@echo "  clean                  Clean Terraform cache"
 	@echo ""
-	@echo "Application:"
-	@echo "  make stack GROUP=ai"
-	@echo "  make stack-openbao GROUP=splunk"
+	@echo "Examples:"
+	@echo "  make bootstrap"
+	@echo "  make deploy STACK=splunk"
+	@echo "  make deploy STACK=openbao"
+	@echo "  make plan STACK=pihole"
+	@echo "  make destroy STACK=pihole"
 	@echo ""
-	@echo "OpenBao:"
-	@echo "  make check-openbao-credentials"
-	@echo ""
-	@echo "Full deployment:"
-	@echo "  make deploy GROUP=ai"
-	@echo "  make deploy GROUP=splunk"
-	@echo "  make deploy-all"
-	@echo ""
-	@echo "Available stacks:"
-	@echo "  $(STACKS)"
-	@echo ""
-
 
 # ============================================================
-# Validation
+# Bootstrap (One-time)
 # ============================================================
 
-.PHONY: check-group
-
-check-group:
-	@if [ -z "$(GROUP)" ]; then \
-		echo "ERROR: GROUP is required"; \
-		echo "Usage: make <target> GROUP=ai"; \
-		exit 1; \
-	fi
-	@if ! echo "$(STACKS)" | grep -qw "$(GROUP)"; then \
-		echo "ERROR: Unknown GROUP '$(GROUP)'"; \
-		echo "Available stacks: $(STACKS)"; \
-		exit 1; \
-	fi
-
-
-.PHONY: check-openbao-credentials
-
-check-openbao-credentials:
-	@if [ ! -s "$(OPENBAO_ROLE_ID_FILE)" ]; then \
-		echo "ERROR: Missing OpenBao Role ID file:"; \
-		echo "  $(OPENBAO_ROLE_ID_FILE)"; \
-		exit 1; \
-	fi
-	@if [ ! -s "$(OPENBAO_SECRET_ID_FILE)" ]; then \
-		echo "ERROR: Missing OpenBao Secret ID file:"; \
-		echo "  $(OPENBAO_SECRET_ID_FILE)"; \
-		exit 1; \
-	fi
-	@chmod 600 \
-		"$(OPENBAO_ROLE_ID_FILE)" \
-		"$(OPENBAO_SECRET_ID_FILE)"
-	@echo "[ OK ] OpenBao credentials found"
-
+bootstrap:
+	@echo ""
+	@echo "Starting OpenBao Bootstrap..."
+	@echo ""
+	cd stacks/openbao && ./00-bootstrap-openbao.sh
+	@echo ""
+	@echo "Bootstrap complete!"
+	@echo ""
 
 # ============================================================
 # Terraform
 # ============================================================
 
-.PHONY: terraform-init terraform-fmt terraform-validate \
-        terraform-plan terraform-apply terraform-output \
-        terraform-destroy
+plan:
+	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required (e.g., make plan STACK=splunk)"; exit 1; fi
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform plan
 
-terraform-init: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform init
+apply:
+	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required (e.g., make apply STACK=splunk)"; exit 1; fi
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
-terraform-fmt:
-	terraform fmt -recursive "$(TERRAFORM_DIR)"
-
-terraform-validate: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform validate
-
-terraform-plan: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform plan
-
-terraform-apply: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform apply
-
-terraform-output: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform output
-
-terraform-destroy: check-group
-	cd "$(STACKS_DIR)/$(GROUP)" && terraform destroy
-
+destroy:
+	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required (e.g., make destroy STACK=splunk)"; exit 1; fi
+	@echo ""
+	@echo "WARNING: Destroying $(STACK)"
+	@echo "Press Ctrl+C to cancel, or wait 5 seconds..."
+	@sleep 5
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy
 
 # ============================================================
-# Ansible
+# Deploy (Terraform + Ansible)
 # ============================================================
 
-.PHONY: ansible-bootstrap ansible-docker ansible-dockge
-
-ansible-bootstrap: check-group
-	ANSIBLE_CONFIG="$(ANSIBLE_CONFIG)" \
-	ansible-playbook ansible/playbooks/lxc-bootstrap.yml \
-		--limit "$(GROUP)_hosts"
-
-ansible-docker: check-group
-	ANSIBLE_CONFIG="$(ANSIBLE_CONFIG)" \
-	ansible-playbook ansible/playbooks/docker.yml \
-		--limit "$(GROUP)_hosts"
-
-ansible-dockge: check-group
-	ANSIBLE_CONFIG="$(ANSIBLE_CONFIG)" \
-	ansible-playbook ansible/playbooks/dockge.yml \
-		--limit "$(GROUP)_hosts"
-
-
-# ============================================================
-# Application Stack
-# ============================================================
-
-.PHONY: stack
-
-stack: check-group
-	ANSIBLE_CONFIG="$(ANSIBLE_CONFIG)" \
-	ansible-playbook ansible/playbooks/deploy-stack.yml \
-		-e "stack_name=$(GROUP)" \
-		-e "enable_openbao_agent=false"
-
-
-# ============================================================
-# Application Stack with OpenBao Agent
-# ============================================================
-
-.PHONY: stack-openbao
-
-stack-openbao: check-group check-openbao-credentials
-	@ROLE_ID="$$(cat "$(OPENBAO_ROLE_ID_FILE)")"; \
-	SECRET_ID="$$(cat "$(OPENBAO_SECRET_ID_FILE)")"; \
-	ANSIBLE_CONFIG="$(ANSIBLE_CONFIG)" \
-	ansible-playbook ansible/playbooks/deploy-stack.yml \
-		-e "stack_name=$(GROUP)" \
-		-e "enable_openbao_agent=true" \
-		-e "openbao_role_id=$$ROLE_ID" \
-		-e "openbao_secret_id=$$SECRET_ID"
-
-
-# ============================================================
-# Full Deployment
-# ============================================================
-
-.PHONY: deploy
-
-deploy: check-group
+deploy:
+	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required (e.g., make deploy STACK=splunk)"; exit 1; fi
 	@echo ""
-	@echo "============================================================"
-	@echo " Deploying stack: $(GROUP)"
-	@echo "============================================================"
-
+	@echo "=========================================="
+	@echo "Deploying: $(STACK)"
+	@echo "=========================================="
 	@echo ""
-	@echo "=== Terraform init ==="
-	$(MAKE) terraform-init GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Terraform format ==="
-	$(MAKE) terraform-fmt
-
-	@echo ""
-	@echo "=== Terraform validate ==="
-	$(MAKE) terraform-validate GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Terraform plan ==="
-	$(MAKE) terraform-plan GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Terraform apply ==="
-	$(MAKE) terraform-apply GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Ansible bootstrap ==="
-	$(MAKE) ansible-bootstrap GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Ansible Docker ==="
-	$(MAKE) ansible-docker GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Ansible Dockge ==="
-	$(MAKE) ansible-dockge GROUP="$(GROUP)"
-
-	@echo ""
-	@echo "=== Application stack ==="
-	@if [ "$(GROUP)" = "splunk" ]; then \
-		$(MAKE) stack-openbao GROUP="$(GROUP)"; \
-	else \
-		$(MAKE) stack GROUP="$(GROUP)"; \
+	
+	@# Check if bootstrap needed (for agent stacks)
+	@if [ "$(STACK)" != "openbao" ]; then \
+		if [ ! -d "$(BOOTSTRAP_DIR)/lxc*" ]; then \
+			echo "ERROR: Bootstrap credentials not found!"; \
+			echo "Run: make bootstrap"; \
+			exit 1; \
+		fi; \
 	fi
-
+	
+	@echo "Step 1: Terraform Apply"
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
+	
 	@echo ""
-	@echo "============================================================"
-	@echo " Deployment complete: $(GROUP)"
-	@echo "============================================================"
-
+	@echo "Waiting for container..."
+	@sleep 10
+	
+	@echo ""
+	@echo "Step 2: Ansible Deploy"
+	@if [ "$(STACK)" = "openbao" ]; then \
+		ansible-playbook ansible/playbooks/deploy-stack.yml \
+			-e stack_name=$(STACK) \
+			-e enable_openbao_agent=false; \
+	else \
+		VMID=$$(grep "vm_id.*=" $(TERRAFORM_DIR)/$(STACK)/main.tf | grep -oE '[0-9]+' | head -1); \
+		ROLE_ID=$$(cat $(BOOTSTRAP_DIR)/lxc$$VMID-$(STACK)/role-id 2>/dev/null); \
+		SECRET_ID=$$(cat $(BOOTSTRAP_DIR)/lxc$$VMID-$(STACK)/secret-id 2>/dev/null); \
+		ansible-playbook ansible/playbooks/deploy-stack.yml \
+			-e stack_name=$(STACK) \
+			-e enable_openbao_agent=true \
+			-e openbao_role_id="$$ROLE_ID" \
+			-e openbao_secret_id="$$SECRET_ID"; \
+	fi
+	
+	@echo ""
+	@echo "=========================================="
+	@echo "Deployment complete: $(STACK)"
+	@echo "=========================================="
+	@echo ""
 
 # ============================================================
-# Deploy All Stacks
+# Cleanup
 # ============================================================
 
-.PHONY: deploy-all
-
-deploy-all:
-	@for stack in $(STACKS); do \
-		echo ""; \
-		echo "============================================================"; \
-		echo " Deploying $$stack"; \
-		echo "============================================================"; \
-		$(MAKE) deploy GROUP="$$stack" || exit 1; \
-	done
-
-	@echo ""
-	@echo "============================================================"
-	@echo " All stacks deployed"
-	@echo "============================================================"
+clean:
+	@echo "Cleaning Terraform cache..."
+	find $(TERRAFORM_DIR) -name ".terraform" -type d -exec rm -rf {} + 2>/dev/null || true
+	find $(TERRAFORM_DIR) -name ".terraform.lock.hcl" -delete 2>/dev/null || true
+	find $(TERRAFORM_DIR) -name "*.tfstate*" -delete 2>/dev/null || true
+	@echo "Clean complete"
