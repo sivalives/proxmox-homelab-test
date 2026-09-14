@@ -1,0 +1,7 @@
+---
+- name: Install OpenBao CLI and credentials
+  hosts: "{{ stack_name }}"
+  become: true
+
+  roles:
+    - openbao-agent

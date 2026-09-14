@@ -1,6 +1,5 @@
-# ansible/playbooks/deploy-stack.yml
 ---
-- name: Deploy homelab stack with OpenBao agent
+- name: Deploy homelab stack with OpenBao
   hosts: "{{ stack_name }}"
   become: true
   gather_facts: true
@@ -22,11 +21,6 @@
         delay: 5
 
   roles:
-    # Step 1: Setup OpenBao agent (if enabled)
-    - role: openbao-agent
-      when: enable_openbao_agent | default(false) | bool
-
-    # Step 2: Deploy Docker stack
     - role: stack
 
   post_tasks:
@@ -35,4 +29,3 @@
         msg:
           - "Stack deployment complete!"
           - "Stack: {{ stack_name }}"
-          - "Agent enabled: {{ enable_openbao_agent | default(false) }}"
