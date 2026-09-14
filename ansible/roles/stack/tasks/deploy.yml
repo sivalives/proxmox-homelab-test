@@ -112,25 +112,19 @@
 
 - name: Parse shared OpenBao secrets
   ansible.builtin.set_fact:
-    shared_secrets: >-
-      {{
-        openbao_shared_secrets.stdout.data.data
-        | default({})
-      }}
+    shared_secrets: "{{ openbao_shared_secrets.stdout.data.data }}"
   no_log: true
 
 - name: Parse stack OpenBao secrets
   ansible.builtin.set_fact:
-    app_secrets: >-
-      {{
-        openbao_stack_secrets.stdout.data.data
-        | default({})
-      }}
+    app_secrets: "{{ openbao_stack_secrets.stdout.data.data }}"
   no_log: true
 
 - name: Display fetched secret keys
   ansible.builtin.debug:
-    msg: "Fetched secrets for {{ stack_name }}: {{ app_secrets.keys() | list }}"
+    msg:
+      - "Shared secrets: {{ shared_secrets.keys() | list }}"
+      - "Stack secrets: {{ app_secrets.keys() | list }}"
 
 # -------------------------------------------------------------------
 # Create service directory
