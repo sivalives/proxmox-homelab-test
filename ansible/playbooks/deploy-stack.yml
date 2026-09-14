@@ -1,7 +1,38 @@
-- name: Deploy homelab stack group
-  hosts: "{{ stack_group }}_hosts"
-  become: false
-  gather_facts: false
+# ansible/playbooks/deploy-stack.yml
+---
+- name: Deploy homelab stack with OpenBao agent
+  hosts: "{{ stack_name }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    openbao_addr: "http://192.168.1.101:8200"
+
+  pre_tasks:
+    - name: Validate stack name
+      ansible.builtin.assert:
+        that:
+          - stack_name is defined
+          - stack_name | length > 0
+        fail_msg: "stack_name required (e.g., -e stack_name=splunk)"
+
+    - name: Wait for SSH connection
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        delay: 5
 
   roles:
+    # Step 1: Setup OpenBao agent (if enabled)
+    - role: openbao-agent
+      when: enable_openbao_agent | default(false) | bool
+
+    # Step 2: Deploy Docker stack
     - role: stack
+
+  post_tasks:
+    - name: Display deployment complete
+      ansible.builtin.debug:
+        msg:
+          - "Stack deployment complete!"
+          - "Stack: {{ stack_name }}"
+          - "Agent enabled: {{ enable_openbao_agent | default(false) }}"
