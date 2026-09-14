@@ -16,28 +16,31 @@
   ansible.builtin.set_fact:
     openbao_version: "2.6.2"
 
-- name: Create temporary download directory
+- name: Create temporary download directory (on real disk)
   ansible.builtin.file:
-    path: /tmp/openbao-install
+    path: /var/tmp/openbao-install
     state: directory
     mode: "0755"
+  become: true
 
 - name: Download OpenBao binary
   ansible.builtin.get_url:
     url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.tar.gz"
-    dest: /tmp/openbao-install/openbao.tar.gz
+    dest: /var/tmp/openbao-install/openbao.tar.gz
     mode: "0644"
+  become: true
 
 - name: Extract OpenBao binary
   ansible.builtin.unarchive:
-    src: /tmp/openbao-install/openbao.tar.gz
-    dest: /tmp/openbao-install
+    src: /var/tmp/openbao-install/openbao.tar.gz
+    dest: /var/tmp/openbao-install
     remote_src: true
-    creates: /tmp/openbao-install/bao
+    creates: /var/tmp/openbao-install/bao
+  become: true
 
 - name: Install OpenBao binary to /usr/local/bin
   ansible.builtin.copy:
-    src: /tmp/openbao-install/bao
+    src: /var/tmp/openbao-install/bao
     dest: /usr/local/bin/bao
     mode: "0755"
     remote_src: true
@@ -54,8 +57,9 @@
 
 - name: Cleanup temporary files
   ansible.builtin.file:
-    path: /tmp/openbao-install
+    path: /var/tmp/openbao-install
     state: absent
+  become: true
 
 - name: Create OpenBao directories
   ansible.builtin.file:
