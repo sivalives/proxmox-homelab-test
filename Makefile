@@ -1,11 +1,20 @@
-# Homelab Makefile - Simple Version
+# Homelab Makefile - Terraform + Ansible + OpenBao
 
 .PHONY: help bootstrap plan apply destroy deploy clean
 
+# -------------------------------------------------------------------
 # Variables
+# -------------------------------------------------------------------
+
 STACK ?=
 TERRAFORM_DIR := terraform/stacks
 BOOTSTRAP_DIR := stacks/openbao/bootstrap
+ANSIBLE_DIR := ansible
+ANSIBLE_PLAYBOOK := ansible-playbook
+
+# -------------------------------------------------------------------
+# Help
+# -------------------------------------------------------------------
 
 help:
 	@echo ""
@@ -22,33 +31,75 @@ help:
 	@echo "  clean                  Clean Terraform cache"
 	@echo ""
 
+# -------------------------------------------------------------------
+# OpenBao Bootstrap
+# -------------------------------------------------------------------
+
 bootstrap:
 	@echo "Starting OpenBao Bootstrap..."
 	cd stacks/openbao && ./00-bootstrap-openbao.sh
 
+# -------------------------------------------------------------------
+# Terraform
+# -------------------------------------------------------------------
+
 plan:
-	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required"; exit 1; fi
+	@if [ -z "$(STACK)" ]; then \
+		echo "ERROR: STACK required"; \
+		exit 1; \
+	fi
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform plan
 
 apply:
-	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required"; exit 1; fi
+	@if [ -z "$(STACK)" ]; then \
+		echo "ERROR: STACK required"; \
+		exit 1; \
+	fi
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
-destroy:
-	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required"; exit 1; fi
-	@echo "WARNING: Destroying $(STACK) in 5 seconds..."
-	@sleep 5
-	cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy
+# -------------------------------------------------------------------
+# Full Deployment
+# -------------------------------------------------------------------
 
 deploy:
-	@if [ -z "$(STACK)" ]; then echo "ERROR: STACK required"; exit 1; fi
-	@echo "Deploying: $(STACK)"
+	@if [ -z "$(STACK)" ]; then \
+		echo "ERROR: STACK required"; \
+		exit 1; \
+	fi
+
+	@echo ""
+	@echo "=================================================="
+	@echo " Deploying: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+	@echo ">>> Step 1/6: Terraform apply"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
+
+	@echo ""
+	@echo ">>> Waiting for LXC to become available..."
 	@sleep 10
+
+	@echo ""
+	@echo ">>> Step 2/6: LXC bootstrap"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 3/6: Docker setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 4/6: Dockge setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockge.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 5/6: OpenBao CLI + credentials"
+
 	@if [ "$(STACK)" = "openbao" ]; then \
-		ansible-playbook ansible/playbooks/deploy-stack.yml \
-			-e stack_name=$(STACK) \
-			-e enable_openbao_agent=false; \
+		echo "OpenBao server - skipping client credentials setup"; \
 	else \
 		CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" | head -1); \
 		if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ]; then \
@@ -57,15 +108,42 @@ deploy:
 			echo "Run: make bootstrap"; \
 			exit 1; \
 		fi; \
-		ROLE_ID=$$(cat $$CRED_DIR/role-id); \
-		SECRET_ID=$$(cat $$CRED_DIR/secret-id); \
+		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
+		SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
 		echo "Using credentials from $$CRED_DIR"; \
-		ansible-playbook ansible/playbooks/deploy-stack.yml \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
 			-e stack_name=$(STACK) \
-			-e enable_openbao_agent=true \
 			-e openbao_role_id="$$ROLE_ID" \
 			-e openbao_secret_id="$$SECRET_ID"; \
 	fi
+
+	@echo ""
+	@echo ">>> Step 6/6: Deploy stack"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo "=================================================="
+	@echo " Deployment complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Destroy
+# -------------------------------------------------------------------
+
+destroy:
+	@if [ -z "$(STACK)" ]; then \
+		echo "ERROR: STACK required"; \
+		exit 1; \
+	fi
+	@echo "WARNING: Destroying $(STACK) in 5 seconds..."
+	@sleep 5
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy
+
+# -------------------------------------------------------------------
+# Clean
+# -------------------------------------------------------------------
 
 clean:
 	find $(TERRAFORM_DIR) -name ".terraform" -type d -exec rm -rf {} + 2>/dev/null || true
