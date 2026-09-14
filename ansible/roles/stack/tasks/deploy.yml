@@ -94,6 +94,22 @@
       }}
   no_log: true
 
+- name: Debug shared OpenBao response structure
+  ansible.builtin.debug:
+    msg:
+      rc: "{{ openbao_shared_secrets.rc }}"
+      stdout_start: "{{ openbao_shared_secrets.stdout[:500] }}"
+      stderr: "{{ openbao_shared_secrets.stderr | default('') }}"
+  no_log: false
+
+- name: Debug stack OpenBao response structure
+  ansible.builtin.debug:
+    msg:
+      rc: "{{ openbao_stack_secrets.rc }}"
+      stdout_start: "{{ openbao_stack_secrets.stdout[:500] }}"
+      stderr: "{{ openbao_stack_secrets.stderr | default('') }}"
+  no_log: false
+
 - name: Parse OpenBao secrets
   ansible.builtin.set_fact:
     app_secrets: >-
