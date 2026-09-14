@@ -62,8 +62,13 @@ resource "proxmox_virtual_environment_container" "this" {
     type             = "ubuntu"
   }
 
-  features {
-    nesting = true
+  # Features block only for privileged containers
+  # Unprivileged containers with nesting enabled in Proxmox settings
+  dynamic "features" {
+    for_each = var.unprivileged ? [] : [1]
+    content {
+      nesting = true
+    }
   }
 
   unprivileged  = var.unprivileged
