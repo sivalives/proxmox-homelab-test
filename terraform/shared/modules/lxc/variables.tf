@@ -73,13 +73,15 @@ variable "template" {
 }
 
 variable "nesting" {
-  description = "Enable nesting"
+  description = "Enable nesting (for Docker in LXC)"
   type        = bool
+  default     = true
 }
 
 variable "unprivileged" {
-  description = "Unprivileged container"
+  description = "Unprivileged container (recommended: true for better Proxmox compatibility)"
   type        = bool
+  default     = true
 }
 
 variable "start_on_boot" {
