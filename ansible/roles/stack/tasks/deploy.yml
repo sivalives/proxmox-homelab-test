@@ -1,49 +1,85 @@
-# ansible/roles/stack/tasks/deploy.yml
 ---
 - name: Set facts for this compose project
   ansible.builtin.set_fact:
     stack_service_dir: "{{ compose_file.path | dirname }}"
     stack_service_name: "{{ compose_file.path | dirname | basename }}"
-    openbao_socket: "/var/run/openbao/agent.sock"
 
-- name: Wait for OpenBao agent
-  ansible.builtin.wait_for:
-    path: "{{ openbao_socket }}"
-    timeout: 30
-  retries: 3
-  delay: 5
-  register: agent_ready
-  failed_when: agent_ready is failed and not ansible_check_mode
+# -------------------------------------------------------------------
+# OpenBao
+# -------------------------------------------------------------------
 
-- name: Display message if agent not ready (check mode)
-  ansible.builtin.debug:
-    msg: "OpenBao agent socket not ready (running in check mode)"
-  when: agent_ready is failed and ansible_check_mode
+- name: Verify OpenBao CLI exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/bao
+  register: bao_binary
+
+- name: Fail if OpenBao CLI is missing
+  ansible.builtin.fail:
+    msg: >
+      /usr/local/bin/bao was not found.
+      Make sure the OpenBao role runs before the stack role.
+  when: not bao_binary.stat.exists
+
+- name: Authenticate to OpenBao using AppRole
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+
+      ROLE_ID="$(cat /var/lib/openbao/role-id)"
+      SECRET_ID="$(cat /var/lib/openbao/secret-id)"
+
+      /usr/local/bin/bao write \
+        -field=token \
+        -no-store \
+        auth/approle/login \
+        role_id="$ROLE_ID" \
+        secret_id="$SECRET_ID"
+    executable: /bin/bash
+  environment:
+    BAO_ADDR: "{{ openbao_addr }}"
+  register: openbao_login
+  changed_when: false
+  no_log: true
+
+- name: Verify OpenBao authentication
+  ansible.builtin.assert:
+    that:
+      - openbao_login.stdout | trim | length > 0
+    fail_msg: "OpenBao AppRole authentication failed."
+
+# -------------------------------------------------------------------
+# Fetch secrets
+# -------------------------------------------------------------------
 
 - name: Fetch secrets from OpenBao
   ansible.builtin.command:
     cmd: >
-      curl --fail --silent --show-error
-      --max-time 10
-      --unix-socket {{ openbao_socket }}
-      http://localhost/v1/secret/data/{{ stack_name }}
+      /usr/local/bin/bao kv get
+      -format=json
+      -address={{ openbao_addr }}
+      secret/{{ stack_name }}
+  environment:
+    BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
   register: openbao_secrets
   changed_when: false
+  no_log: true
 
-- name: Parse secrets
+- name: Parse OpenBao secrets
   ansible.builtin.set_fact:
-    app_secrets: "{{ openbao_secrets.stdout | from_json | default({}) }}"
-  when: openbao_secrets.stdout != ""
+    app_secrets: >-
+      {{
+        (openbao_secrets.stdout | from_json).data.data
+        | default({})
+      }}
+  no_log: true
 
-- name: Set empty secrets if fetch failed
-  ansible.builtin.set_fact:
-    app_secrets: {}
-  when: openbao_secrets.stdout == "" or openbao_secrets is failed
-
-- name: Debug - show fetched secrets keys
+- name: Display fetched secret keys
   ansible.builtin.debug:
     msg: "Fetched secrets for {{ stack_name }}: {{ app_secrets.keys() | list }}"
-  when: app_secrets | length > 0
+
+# -------------------------------------------------------------------
+# Create service directory
+# -------------------------------------------------------------------
 
 - name: Create service directory
   ansible.builtin.file:
@@ -53,7 +89,10 @@
     group: root
     mode: "0755"
 
-# Render .env file if template exists
+# -------------------------------------------------------------------
+# Render .env
+# -------------------------------------------------------------------
+
 - name: Check if .env.j2 template exists
   ansible.builtin.stat:
     path: "{{ stack_service_dir }}/.env.j2"
@@ -72,13 +111,17 @@
     secrets: "{{ app_secrets }}"
   when: env_template.stat.exists
   register: env_rendered
+  no_log: true
 
 - name: Display .env file rendered
   ansible.builtin.debug:
     msg: ".env file rendered for {{ stack_service_name }}"
   when: env_rendered is changed
 
-# Copy docker-compose files
+# -------------------------------------------------------------------
+# Copy Docker Compose file
+# -------------------------------------------------------------------
+
 - name: Copy docker-compose file
   ansible.builtin.copy:
     src: "{{ compose_file.path }}"
@@ -87,23 +130,11 @@
     group: root
     mode: "0644"
 
-- name: Copy additional config files
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/"
-    owner: root
-    group: root
-    mode: "0644"
-  with_fileglob:
-    - "{{ stack_service_dir }}/*.hcl"
-    - "{{ stack_service_dir }}/*.conf"
-    - "{{ stack_service_dir }}/*.config"
-    - "{{ stack_service_dir }}/*.yml"
-    - "{{ stack_service_dir }}/*.yaml"
-  ignore_errors: true
+# -------------------------------------------------------------------
+# Deploy
+# -------------------------------------------------------------------
 
-# Deploy with docker-compose
-- name: Deploy with docker-compose
+- name: Deploy with Docker Compose
   ansible.builtin.command:
     cmd: docker compose up -d
     chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
@@ -117,6 +148,10 @@
   ansible.builtin.debug:
     msg: "{{ compose_up.stdout_lines }}"
   when: compose_up.stdout != ""
+
+# -------------------------------------------------------------------
+# Status
+# -------------------------------------------------------------------
 
 - name: Show compose project status
   ansible.builtin.command:

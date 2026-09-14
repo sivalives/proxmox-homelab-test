@@ -1,13 +1,10 @@
-# ansible/roles/openbao-agent/tasks/main.yml
 ---
-- name: Install dependencies
+- name: Install OpenBao dependencies
   ansible.builtin.apt:
     name:
       - curl
-      - wget
-      - jq
       - ca-certificates
-      - unzip
+      - tar
     state: present
     update_cache: true
   become: true
@@ -16,139 +13,81 @@
   ansible.builtin.set_fact:
     openbao_version: "2.6.2"
 
-- name: Create temporary download directory (on real disk)
+- name: Create temporary OpenBao download directory
   ansible.builtin.file:
     path: /var/tmp/openbao-install
     state: directory
+    owner: root
+    group: root
     mode: "0755"
   become: true
 
-- name: Download OpenBao binary
+- name: Download OpenBao
   ansible.builtin.get_url:
     url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.tar.gz"
-    dest: /var/tmp/openbao-install/openbao.tar.gz
+    dest: "/var/tmp/openbao-install/openbao.tar.gz"
+    owner: root
+    group: root
     mode: "0644"
   become: true
 
-- name: Extract OpenBao binary
+- name: Extract OpenBao
   ansible.builtin.unarchive:
-    src: /var/tmp/openbao-install/openbao.tar.gz
-    dest: /var/tmp/openbao-install
+    src: "/var/tmp/openbao-install/openbao.tar.gz"
+    dest: "/var/tmp/openbao-install"
     remote_src: true
-    creates: /var/tmp/openbao-install/bao
+    creates: "/var/tmp/openbao-install/bao"
   become: true
 
-- name: Install OpenBao binary to /usr/local/bin
+- name: Install OpenBao CLI
   ansible.builtin.copy:
-    src: /var/tmp/openbao-install/bao
-    dest: /usr/local/bin/bao
+    src: "/var/tmp/openbao-install/bao"
+    dest: "/usr/local/bin/bao"
+    owner: root
+    group: root
     mode: "0755"
     remote_src: true
   become: true
 
 - name: Verify OpenBao installation
-  ansible.builtin.command: bao version
+  ansible.builtin.command:
+    cmd: /usr/local/bin/bao version
   register: bao_version_output
   changed_when: false
 
-- name: Show installed version
+- name: Show OpenBao version
   ansible.builtin.debug:
     msg: "{{ bao_version_output.stdout }}"
 
-- name: Cleanup temporary files
+- name: Create OpenBao credentials directory
   ansible.builtin.file:
-    path: /var/tmp/openbao-install
-    state: absent
-  become: true
-
-- name: Create OpenBao directories
-  ansible.builtin.file:
-    path: "{{ item }}"
+    path: /var/lib/openbao
     state: directory
     owner: root
     group: root
     mode: "0700"
-  loop:
-    - /var/lib/openbao
-    - /var/run/openbao
-    - /etc/openbao
+  become: true
 
-- name: Copy OpenBao agent config
-  ansible.builtin.template:
-    src: openbao-agent.hcl.j2
-    dest: /etc/openbao/agent.hcl
+- name: Copy OpenBao role ID
+  ansible.builtin.copy:
+    content: "{{ openbao_role_id }}"
+    dest: /var/lib/openbao/role-id
     owner: root
     group: root
     mode: "0600"
+  become: true
 
-- name: Copy OpenBao credentials
+- name: Copy OpenBao secret ID
   ansible.builtin.copy:
-    content: "{{ item.content }}"
-    dest: "{{ item.dest }}"
+    content: "{{ openbao_secret_id }}"
+    dest: /var/lib/openbao/secret-id
     owner: root
     group: root
     mode: "0600"
-  loop:
-    - content: "{{ openbao_role_id }}"
-      dest: /var/lib/openbao/role-id
-    - content: "{{ openbao_secret_id }}"
-      dest: /var/lib/openbao/secret-id
-  when: enable_openbao_agent | bool
+  become: true
 
-- name: Create OpenBao agent systemd service
-  ansible.builtin.copy:
-    content: |
-      [Unit]
-      Description=OpenBao Agent
-      After=network-online.target
-      Wants=network-online.target
-
-      [Service]
-      Type=notify
-      ExecStart=/usr/local/bin/bao agent -config=/etc/openbao/agent.hcl
-      Restart=on-failure
-      RestartSec=5
-      StandardOutput=journal
-      StandardError=journal
-      User=root
-      TimeoutStartSec=60
-      Environment="BAO_ADDR=http://127.0.0.1:8200"
-      RuntimeDirectory=openbao
-      RuntimeDirectoryMode=0700
-
-      [Install]
-      WantedBy=multi-user.target
-    dest: /etc/systemd/system/openbao-agent.service
-    owner: root
-    group: root
-    mode: "0644"
-  when: enable_openbao_agent | bool
-
-- name: Start OpenBao agent
-  ansible.builtin.systemd:
-    name: openbao-agent
-    daemon_reload: true
-    enabled: true
-    state: started
-  when: enable_openbao_agent | bool
-
-- name: Wait for OpenBao agent socket
-  ansible.builtin.wait_for:
-    path: /var/run/openbao/agent.sock
-    timeout: 30
-  when: enable_openbao_agent | bool
-  register: agent_socket_ready
-
-- name: Display agent status
-  ansible.builtin.command:
-    cmd: systemctl status openbao-agent.service
-  register: agent_status
-  changed_when: false
-  when: enable_openbao_agent | bool
-
-- name: Show agent startup result
-  ansible.builtin.debug:
-    msg:
-      - "OpenBao agent setup complete"
-      - "{{ agent_status.stdout_lines }}"
-  when: enable_openbao_agent | bool
+- name: Remove temporary OpenBao installation files
+  ansible.builtin.file:
+    path: /var/tmp/openbao-install
+    state: absent
+  become: true
