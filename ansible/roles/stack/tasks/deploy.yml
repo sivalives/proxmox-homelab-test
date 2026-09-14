@@ -1,44 +1,134 @@
+# ansible/roles/stack/tasks/deploy.yml
 ---
-- name: Determine service directory
+- name: Set facts for this compose project
   ansible.builtin.set_fact:
     stack_service_dir: "{{ compose_file.path | dirname }}"
     stack_service_name: "{{ compose_file.path | dirname | basename }}"
+    openbao_socket: "/var/run/openbao/agent.sock"
+
+- name: Wait for OpenBao agent
+  ansible.builtin.wait_for:
+    path: "{{ openbao_socket }}"
+    timeout: 30
+  retries: 3
+  delay: 5
+  register: agent_ready
+  failed_when: agent_ready is failed and not ansible_check_mode
+
+- name: Display message if agent not ready (check mode)
+  ansible.builtin.debug:
+    msg: "OpenBao agent socket not ready (running in check mode)"
+  when: agent_ready is failed and ansible_check_mode
+
+- name: Fetch secrets from OpenBao
+  ansible.builtin.shell:
+    cmd: |
+      curl --unix-socket {{ openbao_socket }} \
+        http://localhost/v1/secret/data/{{ stack_name }} \
+        2>/dev/null | jq -r '.data.data // empty'
+  register: openbao_secrets
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Parse secrets
+  ansible.builtin.set_fact:
+    app_secrets: "{{ openbao_secrets.stdout | from_json | default({}) }}"
+  when: openbao_secrets.stdout != ""
+
+- name: Set empty secrets if fetch failed
+  ansible.builtin.set_fact:
+    app_secrets: {}
+  when: openbao_secrets.stdout == "" or openbao_secrets is failed
+
+- name: Debug - show fetched secrets keys
+  ansible.builtin.debug:
+    msg: "Fetched secrets for {{ stack_name }}: {{ app_secrets.keys() | list }}"
+  when: app_secrets | length > 0
 
 - name: Create service directory
   ansible.builtin.file:
-    path: "{{ stacks_root }}/{{ stack_service_name }}"
+    path: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
 
-- name: Copy Compose project
-  ansible.builtin.copy:
-    src: "{{ stack_service_dir }}/"
-    dest: "{{ stacks_root }}/{{ stack_service_name }}/"
+# Render .env file if template exists
+- name: Check if .env.j2 template exists
+  ansible.builtin.stat:
+    path: "{{ stack_service_dir }}/.env.j2"
+  register: env_template
+  delegate_to: localhost
+  become: false
+
+- name: Render .env from template
+  ansible.builtin.template:
+    src: "{{ stack_service_dir }}/.env.j2"
+    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/.env"
     owner: root
     group: root
-    mode: preserve
+    mode: "0600"
+  vars:
+    secrets: "{{ app_secrets }}"
+  when: env_template.stat.exists
+  register: env_rendered
 
-- name: Start Compose project
+- name: Display .env file rendered
+  ansible.builtin.debug:
+    msg: ".env file rendered for {{ stack_service_name }}"
+  when: env_rendered is changed
+
+# Copy docker-compose files
+- name: Copy docker-compose file
+  ansible.builtin.copy:
+    src: "{{ compose_file.path }}"
+    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy additional config files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/"
+    owner: root
+    group: root
+    mode: "0644"
+  with_fileglob:
+    - "{{ stack_service_dir }}/*.hcl"
+    - "{{ stack_service_dir }}/*.conf"
+    - "{{ stack_service_dir }}/*.config"
+    - "{{ stack_service_dir }}/*.yml"
+    - "{{ stack_service_dir }}/*.yaml"
+  ignore_errors: true
+
+# Deploy with docker-compose
+- name: Deploy with docker-compose
   ansible.builtin.command:
     cmd: docker compose up -d
-    chdir: "{{ stacks_root }}/{{ stack_service_name }}"
+    chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
   register: compose_up
   changed_when: >
     'Created' in compose_up.stdout or
     'Started' in compose_up.stdout or
     'Recreated' in compose_up.stdout
 
-- name: Show Compose project status
+- name: Show compose up output
+  ansible.builtin.debug:
+    msg: "{{ compose_up.stdout_lines }}"
+  when: compose_up.stdout != ""
+
+- name: Show compose project status
   ansible.builtin.command:
     cmd: docker compose ps
-    chdir: "{{ stacks_root }}/{{ stack_service_name }}"
+    chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
   register: compose_status
   changed_when: false
 
-- name: Display Compose project status
+- name: Display service status
   ansible.builtin.debug:
     msg:
       - "Service: {{ stack_service_name }}"
+      - "Status:"
       - "{{ compose_status.stdout }}"

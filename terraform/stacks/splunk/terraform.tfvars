@@ -21,7 +21,12 @@ startup_delay = 30
 mount_points = [
   {
     storage = "local-lvm"
-    size_gb = 50
+    size_gb = 45
     mount   = "/opt/splunk-data"
+  },
+  {
+    storage = "local-lvm"
+    size_gb = 5
+    mount   = "/opt/splunk-apps"
   }
 ]

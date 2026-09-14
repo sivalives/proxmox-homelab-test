@@ -5,8 +5,8 @@ services:
     hostname: splunk
     restart: unless-stopped
     volumes:
-      - ./data:/opt/splunk/var
-      - ./apps:/opt/splunk/etc/apps
+      - /opt/splunk-data:/opt/splunk/var
+      - /opt/splunk-apps:/opt/splunk/etc/apps
     ports:
       - "8000:8000"
       - "8088:8088"

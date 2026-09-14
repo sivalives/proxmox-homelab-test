@@ -1,0 +1,49 @@
+# shared/modules/lxc/openbao-agent.hcl.tpl
+# OpenBao agent configuration template
+# Variables injected by Terraform
+
+pid_file = "/tmp/openbao-agent.pid"
+
+vault {
+  address = "${openbao_addr}"
+  retry {
+    num_retries = 15
+    retry_wait  = "10s"
+  }
+}
+
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+
+    config = {
+      role_id_file_path      = "/var/lib/openbao/role-id"
+      secret_id_file_path    = "/var/lib/openbao/secret-id"
+      remove_secret_id_file_after_reading = true
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "/var/run/openbao/.vault-token"
+      mode = 0600
+    }
+  }
+}
+
+cache {
+  use_auto_auth_token = true
+  enforce_consistency = "always"
+}
+
+# Local socket for containers to query
+listener "unix" {
+  address     = "/var/run/openbao/agent.sock"
+  tls_disable = true
+}
+
+# TCP listener for direct queries (if needed)
+listener "tcp" {
+  address     = "127.0.0.1:8200"
+  tls_disable = true
+}

@@ -1,7 +1,6 @@
-# terraform/shared/modules/lxc/variables.tf
+# shared/modules/lxc/variables.tf
 
 # ==================== MODULE VARIABLES ====================
-# (These get passed to shared/modules/lxc)
 
 variable "proxmox_node" {
   description = "Proxmox node name"
@@ -110,6 +109,13 @@ variable "controller_ssh_public_key_file" {
   default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
 
+variable "controller_ssh_private_key_file" {
+  description = "Controller SSH private key for provisioning"
+  type        = string
+  default     = "/home/ansible/.ssh/id_ed25519_homelab"
+  sensitive   = true
+}
+
 variable "mount_points" {
   description = "Additional persistent mount points"
   type = list(object({
@@ -118,4 +124,32 @@ variable "mount_points" {
     mount   = string
   }))
   default = []
+}
+
+# ==================== OPENBAO AGENT VARIABLES ====================
+
+variable "enable_openbao_agent" {
+  description = "Enable OpenBao agent in this LXC"
+  type        = bool
+  default     = false
+}
+
+variable "openbao_addr" {
+  description = "OpenBao server address (http://192.168.1.101:8200)"
+  type        = string
+  default     = "http://192.168.1.101:8200"
+}
+
+variable "openbao_role_id" {
+  description = "OpenBao AppRole role-id"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "openbao_secret_id" {
+  description = "OpenBao AppRole secret-id"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

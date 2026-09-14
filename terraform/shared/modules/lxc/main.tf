@@ -1,3 +1,4 @@
+# shared/modules/lxc/main.tf
 resource "proxmox_virtual_environment_container" "this" {
   node_name = var.proxmox_node
   vm_id     = var.vmid
@@ -35,9 +36,9 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   disk {
-  datastore_id = var.storage
-  size         = var.disk_gb
-}
+    datastore_id = var.storage
+    size         = var.disk_gb
+  }
 
   dynamic "mount_point" {
     for_each = var.mount_points
@@ -63,13 +64,107 @@ resource "proxmox_virtual_environment_container" "this" {
     nesting = true
   }
 
-  unprivileged  = true
-  start_on_boot = true
+  unprivileged  = var.unprivileged
+  start_on_boot = var.start_on_boot
 
   startup {
-    order    = 1
-    up_delay = 30
+    order    = var.startup_order
+    up_delay = var.startup_delay
   }
 
   protection = false
+
+  # ============================================================
+  # OPENBAO AGENT SETUP (conditional)
+  # ============================================================
+
+  # Install OpenBao
+  provisioner "remote-exec" {
+    inline = [
+      "apt-get update",
+      "apt-get install -y openbao wget curl"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = var.ip_address
+      timeout     = "5m"
+    }
+  }
+
+  # Create agent config (only if enabled)
+  provisioner "file" {
+    count   = var.enable_openbao_agent ? 1 : 0
+    content = templatefile("${path.module}/openbao-agent.hcl.tpl", {
+      openbao_addr = var.openbao_addr
+    })
+    destination = "/etc/openbao/agent.hcl"
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = var.ip_address
+      timeout     = "5m"
+    }
+  }
+
+  # Copy role-id
+  provisioner "file" {
+    count       = var.enable_openbao_agent ? 1 : 0
+    content     = var.openbao_role_id
+    destination = "/var/lib/openbao/role-id"
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = var.ip_address
+      timeout     = "5m"
+    }
+  }
+
+  # Copy secret-id
+  provisioner "file" {
+    count       = var.enable_openbao_agent ? 1 : 0
+    content     = var.openbao_secret_id
+    destination = "/var/lib/openbao/secret-id"
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = var.ip_address
+      timeout     = "5m"
+    }
+  }
+
+  # Setup directories and systemd service
+  provisioner "remote-exec" {
+    count = var.enable_openbao_agent ? 1 : 0
+    inline = [
+      "mkdir -p /var/lib/openbao /var/run/openbao",
+      "chmod 700 /var/lib/openbao /var/run/openbao",
+      "chmod 600 /var/lib/openbao/role-id /var/lib/openbao/secret-id",
+
+      # Create systemd service
+      "cat > /etc/systemd/system/openbao-agent.service <<'EOF'\n[Unit]\nDescription=OpenBao Agent\nAfter=network.target\nWants=network-online.target\n\n[Service]\nType=notify\nExecStart=/usr/bin/bao agent -config=/etc/openbao/agent.hcl\nRestart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\nUser=root\nTimeoutStartSec=60\n\n[Install]\nWantedBy=multi-user.target\nEOF",
+
+      "systemctl daemon-reload",
+      "systemctl enable openbao-agent.service",
+      "systemctl start openbao-agent.service",
+      "sleep 3",
+      "systemctl status openbao-agent.service"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file(var.controller_ssh_private_key_file)
+      host        = var.ip_address
+      timeout     = "5m"
+    }
+  }
 }

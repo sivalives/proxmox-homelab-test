@@ -1,13 +1,15 @@
+# ansible/roles/stack/tasks/main.yml
 ---
-- name: Validate stack group
+- name: Validate stack name
   ansible.builtin.assert:
     that:
-      - stack_group | length > 0
-    fail_msg: "stack_group must be provided"
+      - stack_name is defined
+      - stack_name | length > 0
+    fail_msg: "stack_name must be provided (e.g., -e stack_name=splunk)"
 
 - name: Find Compose projects
   ansible.builtin.find:
-    paths: "{{ stack_source_root }}/{{ stack_group }}"
+    paths: "{{ stack_source_root }}/{{ stack_name }}"
     patterns:
       - "compose.yml"
       - "compose.yaml"
@@ -23,18 +25,17 @@
   ansible.builtin.assert:
     that:
       - compose_files.files | length > 0
-    fail_msg: "No compose.yml files found under {{ stack_source_root }}/{{ stack_group }}"
+    fail_msg: "No compose files found under {{ stack_source_root }}/{{ stack_name }}"
 
-- name: Create stack group directory
+- name: Create stack directory
   ansible.builtin.file:
-    path: "{{ stacks_root }}/{{ stack_group }}"
+    path: "{{ stacks_root }}/{{ stack_name }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
 
-#This calls the deploy.yml task for each compose project found under the stack group directory
-- name: Deploy Compose projects
+- name: Deploy stack with OpenBao secrets
   ansible.builtin.include_tasks: deploy.yml
   loop: "{{ compose_files.files }}"
   loop_control:
