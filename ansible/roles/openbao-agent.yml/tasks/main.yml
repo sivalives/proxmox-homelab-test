@@ -1,0 +1,104 @@
+# ansible/roles/openbao-agent/tasks/main.yml
+---
+- name: Install OpenBao client
+  ansible.builtin.apt:
+    name:
+      - openbao
+      - wget
+      - curl
+      - jq
+    state: present
+    update_cache: true
+
+- name: Create OpenBao directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /var/lib/openbao
+    - /var/run/openbao
+    - /etc/openbao
+
+- name: Copy OpenBao agent config
+  ansible.builtin.template:
+    src: openbao-agent.hcl.j2
+    dest: /etc/openbao/agent.hcl
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    openbao_addr: "{{ openbao_addr }}"
+  when: enable_openbao_agent | bool
+
+- name: Copy OpenBao credentials
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - content: "{{ openbao_role_id }}"
+      dest: /var/lib/openbao/role-id
+    - content: "{{ openbao_secret_id }}"
+      dest: /var/lib/openbao/secret-id
+  when: enable_openbao_agent | bool
+
+- name: Create OpenBao agent systemd service
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=OpenBao Agent
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=notify
+      ExecStart=/usr/bin/bao agent -config=/etc/openbao/agent.hcl
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      User=root
+      TimeoutStartSec=60
+      Environment="BAO_ADDR=http://127.0.0.1:8200"
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/openbao-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: enable_openbao_agent | bool
+
+- name: Start OpenBao agent
+  ansible.builtin.systemd:
+    name: openbao-agent
+    daemon_reload: true
+    enabled: true
+    state: started
+  when: enable_openbao_agent | bool
+
+- name: Wait for OpenBao agent socket
+  ansible.builtin.wait_for:
+    path: /var/run/openbao/agent.sock
+    timeout: 30
+  when: enable_openbao_agent | bool
+  register: agent_socket_ready
+
+- name: Display agent status
+  ansible.builtin.command:
+    cmd: systemctl status openbao-agent.service
+  register: agent_status
+  changed_when: false
+  when: enable_openbao_agent | bool
+
+- name: Show agent startup result
+  ansible.builtin.debug:
+    msg:
+      - "OpenBao agent setup complete"
+      - "{{ agent_status.stdout_lines }}"
+  when: enable_openbao_agent | bool
