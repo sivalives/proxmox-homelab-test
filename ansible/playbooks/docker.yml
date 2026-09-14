@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Docker
-  hosts: docker_hosts
+  hosts: "{{ stack_name }}"
   become: false
   gather_facts: true
 
