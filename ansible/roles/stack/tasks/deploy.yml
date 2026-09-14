@@ -21,15 +21,14 @@
   when: agent_ready is failed and ansible_check_mode
 
 - name: Fetch secrets from OpenBao
-  ansible.builtin.shell:
-    cmd: |
-      curl --unix-socket {{ openbao_socket }} \
-        http://localhost/v1/secret/data/{{ stack_name }} \
-        2>/dev/null | jq -r '.data.data // empty'
+  ansible.builtin.command:
+    cmd: >
+      curl --fail --silent --show-error
+      --max-time 10
+      --unix-socket {{ openbao_socket }}
+      http://localhost/v1/secret/data/{{ stack_name }}
   register: openbao_secrets
   changed_when: false
-  failed_when: false
-  ignore_errors: true
 
 - name: Parse secrets
   ansible.builtin.set_fact:
