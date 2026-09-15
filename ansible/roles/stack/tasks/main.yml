@@ -7,9 +7,18 @@
       - stack_name | length > 0
     fail_msg: "stack_name must be provided (e.g., -e stack_name=splunk)"
 
-- name: Find Compose projects
+- name: Copy entire stack directory to destination
+  ansible.builtin.copy:
+    src: "{{ stack_source_root }}/{{ stack_name }}/"
+    dest: "{{ stacks_root }}/{{ stack_name }}/"
+    owner: root
+    group: root
+    directory_mode: "0755"
+    mode: "0644"
+
+- name: Find Compose projects in copied directory
   ansible.builtin.find:
-    paths: "{{ stack_source_root }}/{{ stack_name }}"
+    paths: "{{ stacks_root }}/{{ stack_name }}"
     patterns:
       - "compose.yml"
       - "compose.yaml"
@@ -17,23 +26,13 @@
       - "docker-compose.yaml"
     recurse: true
     file_type: file
-  delegate_to: localhost
-  become: false
   register: compose_files
 
 - name: Assert Compose projects exist
   ansible.builtin.assert:
     that:
       - compose_files.files | length > 0
-    fail_msg: "No compose files found under {{ stack_source_root }}/{{ stack_name }}"
-
-- name: Create stack directory
-  ansible.builtin.file:
-    path: "{{ stacks_root }}/{{ stack_name }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    fail_msg: "No compose files found under {{ stacks_root }}/{{ stack_name }}"
 
 - name: Deploy stack with OpenBao secrets
   ansible.builtin.include_tasks: deploy.yml
