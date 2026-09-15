@@ -129,12 +129,12 @@ variable "mount_points" {
 }
 
 variable "proxmox_ssh_host" {
-  description = "IP address or hostname of the Proxmox node."
+  description = "Proxmox host used for SSH configuration."
   type        = string
 }
 
 variable "proxmox_ssh_private_key_file" {
-  description = "Private SSH key used by Terraform to access the Proxmox node."
+  description = "Private SSH key used to access Proxmox."
   type        = string
   sensitive   = true
 }

@@ -1,16 +1,9 @@
+
 #
 # Proxmox LXC
 #
 # All LXCs created by this module are intended to run Docker.
 #
-# Docker-in-LXC requirements:
-#   - Privileged LXC
-#   - Nesting enabled
-#   - cgroup2 devices allowed
-#   - AppArmor unconfined
-#
-
-
 
 resource "proxmox_virtual_environment_container" "this" {
   node_name = var.proxmox_node
@@ -18,9 +11,6 @@ resource "proxmox_virtual_environment_container" "this" {
 
   description = var.description
 
-  #
-  # LXC initialization
-  #
   initialization {
     hostname = var.hostname
 
@@ -42,32 +32,20 @@ resource "proxmox_virtual_environment_container" "this" {
     }
   }
 
-  #
-  # CPU
-  #
   cpu {
     cores = var.cores
   }
 
-  #
-  # Memory
-  #
   memory {
     dedicated = var.memory_mb
     swap      = var.swap_mb
   }
 
-  #
-  # Root filesystem
-  #
   disk {
     datastore_id = var.storage
     size         = var.disk_gb
   }
 
-  #
-  # Additional mount points
-  #
   dynamic "mount_point" {
     for_each = var.mount_points
 
@@ -78,24 +56,18 @@ resource "proxmox_virtual_environment_container" "this" {
     }
   }
 
-  #
-  # Network
-  #
   network_interface {
     name   = "eth0"
     bridge = var.bridge
   }
 
-  #
-  # Operating system
-  #
   operating_system {
     template_file_id = var.template
     type             = "ubuntu"
   }
 
   #
-  # Docker-in-LXC
+  # All LXCs run Docker
   #
   unprivileged = false
 
@@ -103,9 +75,6 @@ resource "proxmox_virtual_environment_container" "this" {
     nesting = true
   }
 
-  #
-  # Startup
-  #
   start_on_boot = true
 
   startup {
@@ -113,11 +82,15 @@ resource "proxmox_virtual_environment_container" "this" {
     up_delay = 30
   }
 
-  #
-  # Allow Terraform to modify/destroy the container.
-  #
   protection = false
+}
 
+
+#
+# Configure the Proxmox LXC for Docker.
+#
+# This runs from the Terraform controller against the Proxmox host.
+#
 resource "terraform_data" "docker_lxc_proxmox_config" {
   triggers_replace = [
     proxmox_virtual_environment_container.this.id,
@@ -133,20 +106,18 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
 
   provisioner "file" {
     source      = "${path.module}/docker-lxc-hook.sh"
-    destination = "/tmp/lxc-${var.vmid}-docker-hook.sh"
+    destination = "/tmp/lxc-${var.vmid}-docker-config.sh"
   }
 
   provisioner "remote-exec" {
     inline = [
-      "chmod 700 /tmp/lxc-${var.vmid}-docker-hook.sh",
-      "/tmp/lxc-${var.vmid}-docker-hook.sh ${var.vmid} pre-start",
-
-      "rm -f /tmp/lxc-${var.vmid}-docker-hook.sh",
-
-      "if pct status ${var.vmid} | grep -q 'status: running'; then pct stop ${var.vmid}; pct start ${var.vmid}; fi"
+      "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
+      "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+      "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
     ]
   }
-}
 
-
+  depends_on = [
+    proxmox_virtual_environment_container.this
+  ]
 }
