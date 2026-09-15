@@ -17,8 +17,9 @@ resource "proxmox_virtual_environment_file" "docker_lxc_hook" {
 
   file_mode = "0700"
 
-  source {
-    path = "${path.module}/docker-lxc-hook.sh"
+  source_raw {
+    file_name = "lxc-${var.vmid}-docker-hook.sh"
+    data      = file("${path.module}/docker-lxc-hook.sh")
   }
 }
 
