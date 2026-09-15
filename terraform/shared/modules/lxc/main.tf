@@ -71,10 +71,6 @@ resource "proxmox_virtual_environment_container" "this" {
   #
   unprivileged = false
 
-  features {
-    nesting = true
-  }
-
   start_on_boot = true
 
   startup {

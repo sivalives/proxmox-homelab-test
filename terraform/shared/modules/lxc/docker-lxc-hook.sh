@@ -3,23 +3,13 @@
 set -euo pipefail
 
 VMID="$1"
-PHASE="$2"
 CONFIG="/etc/pve/lxc/${VMID}.conf"
 
-case "${PHASE}" in
-  pre-start)
+grep -q '^features:.*nesting=1' "${CONFIG}" || \
+  echo 'features: nesting=1' >> "${CONFIG}"
 
-    # Allow all cgroup2 devices.
-    if ! grep -q '^lxc.cgroup2.devices.allow: a$' "${CONFIG}"; then
-      echo 'lxc.cgroup2.devices.allow: a' >> "${CONFIG}"
-    fi
+grep -q '^lxc.cgroup2.devices.allow: a$' "${CONFIG}" || \
+  echo 'lxc.cgroup2.devices.allow: a' >> "${CONFIG}"
 
-    # Disable AppArmor restrictions for Docker-in-LXC.
-    if ! grep -q '^lxc.apparmor.profile: unconfined$' "${CONFIG}"; then
-      echo 'lxc.apparmor.profile: unconfined' >> "${CONFIG}"
-    fi
-
-    ;;
-esac
-
-exit 0
+grep -q '^lxc.apparmor.profile: unconfined$' "${CONFIG}" || \
+  echo 'lxc.apparmor.profile: unconfined' >> "${CONFIG}"
