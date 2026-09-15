@@ -10,18 +10,6 @@
 #   - AppArmor unconfined
 #
 
-resource "proxmox_virtual_environment_file" "docker_lxc_hook" {
-  content_type = "snippets"
-  datastore_id = var.hook_script_datastore
-  node_name    = var.proxmox_node
-
-  file_mode = "0700"
-
-  source_raw {
-    file_name = "lxc-${var.vmid}-docker-hook.sh"
-    data      = file("${path.module}/docker-lxc-hook.sh")
-  }
-}
 
 
 resource "proxmox_virtual_environment_container" "this" {
@@ -116,14 +104,6 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   #
-  # Proxmox hook for Docker-in-LXC:
-  #
-  #   lxc.cgroup2.devices.allow: a
-  #   lxc.apparmor.profile: unconfined
-  #
-  hook_script_file_id = proxmox_virtual_environment_file.docker_lxc_hook.id
-
-  #
   # Startup
   #
   start_on_boot = true
@@ -137,4 +117,36 @@ resource "proxmox_virtual_environment_container" "this" {
   # Allow Terraform to modify/destroy the container.
   #
   protection = false
+
+resource "terraform_data" "docker_lxc_proxmox_config" {
+  triggers_replace = [
+    proxmox_virtual_environment_container.this.id,
+    filesha256("${path.module}/docker-lxc-hook.sh")
+  ]
+
+  connection {
+    type        = "ssh"
+    host        = var.proxmox_ssh_host
+    user        = "root"
+    private_key = file(pathexpand(var.proxmox_ssh_private_key_file))
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/docker-lxc-hook.sh"
+    destination = "/tmp/lxc-${var.vmid}-docker-hook.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod 700 /tmp/lxc-${var.vmid}-docker-hook.sh",
+      "/tmp/lxc-${var.vmid}-docker-hook.sh ${var.vmid} pre-start",
+
+      "rm -f /tmp/lxc-${var.vmid}-docker-hook.sh",
+
+      "if pct status ${var.vmid} | grep -q 'status: running'; then pct stop ${var.vmid}; pct start ${var.vmid}; fi"
+    ]
+  }
+}
+
+
 }

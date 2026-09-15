@@ -128,8 +128,13 @@ variable "mount_points" {
   default = []
 }
 
-variable "hook_script_datastore" {
-  description = "Proxmox datastore used for LXC hook scripts."
+variable "proxmox_ssh_host" {
+  description = "IP address or hostname of the Proxmox node."
   type        = string
-  default     = "local"
+}
+
+variable "proxmox_ssh_private_key_file" {
+  description = "Private SSH key used by Terraform to access the Proxmox node."
+  type        = string
+  sensitive   = true
 }
