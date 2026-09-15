@@ -30,3 +30,6 @@ mount_points = [
     mount   = "/opt/splunk-apps"
   }
 ]
+#On your controller, set them to the actual Proxmox host and the existing homelab private key
+proxmox_ssh_host = "192.168.1.100"
+proxmox_ssh_private_key_file = "~/.ssh/id_ed25519_homelab"
