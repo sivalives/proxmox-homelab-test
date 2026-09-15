@@ -1,4 +1,4 @@
-# terraform/stacks/ai/variables.tf
+# terraform/stacks/splunk/variables.tf
 
 # ==================== PROVIDER VARIABLES ====================
 variable "proxmox_endpoint" {
@@ -123,6 +123,13 @@ variable "controller_ssh_public_key_file" {
   default     = "/home/ansible/.ssh/id_ed25519_homelab.pub"
 }
 
+variable "controller_ssh_private_key_file" {
+  description = "Controller SSH private key for provisioning"
+  type        = string
+  default     = "/home/ansible/.ssh/id_ed25519_homelab"
+  sensitive   = true
+}
+
 variable "mount_points" {
   description = "Additional persistent mount points"
   type = list(object({
@@ -131,4 +138,15 @@ variable "mount_points" {
     mount   = string
   }))
   default = []
+}
+
+variable "proxmox_ssh_host" {
+  description = "Proxmox host used for Terraform SSH operations."
+  type        = string
+}
+
+variable "proxmox_ssh_private_key_file" {
+  description = "Private SSH key used by Terraform to access Proxmox."
+  type        = string
+  sensitive   = true
 }
