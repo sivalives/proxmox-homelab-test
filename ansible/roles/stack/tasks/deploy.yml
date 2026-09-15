@@ -1,9 +1,18 @@
-# ansible/roles/stack/tasks/deploy.yml
 ---
-- name: Set facts for this compose project
+# -------------------------------------------------------------------
+# Compose project paths
+# -------------------------------------------------------------------
+
+- name: Set facts for this Compose project
   ansible.builtin.set_fact:
     compose_dir: "{{ compose_file.path | dirname }}"
     compose_filename: "{{ compose_file.path | basename }}"
+
+- name: Display Compose project
+  ansible.builtin.debug:
+    msg:
+      - "Compose file: {{ compose_filename }}"
+      - "Compose directory: {{ compose_dir }}"
 
 # -------------------------------------------------------------------
 # OpenBao
@@ -16,16 +25,24 @@
 
 - name: Fail if OpenBao CLI is missing
   ansible.builtin.fail:
-    msg: /usr/local/bin/bao was not found. Make sure the OpenBao agent is running.
+    msg: >
+      /usr/local/bin/bao was not found.
+      Make sure the OpenBao CLI role runs before the stack role.
   when: not bao_binary.stat.exists
 
 - name: Authenticate to OpenBao using AppRole
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
+
       ROLE_ID="$(cat /var/lib/openbao/role-id)"
       SECRET_ID="$(cat /var/lib/openbao/secret-id)"
-      /usr/local/bin/bao write -field=token auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"
+
+      /usr/local/bin/bao write \
+        -field=token \
+        auth/approle/login \
+        role_id="$ROLE_ID" \
+        secret_id="$SECRET_ID"
     executable: /bin/bash
   environment:
     BAO_ADDR: "{{ openbao_addr }}"
@@ -43,26 +60,52 @@
 # Fetch secrets
 # -------------------------------------------------------------------
 
+- name: Fetch shared secrets from OpenBao
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/bao kv get
+      -format=json
+      -address={{ openbao_addr }}
+      secret/shared
+  environment:
+    BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
+  register: openbao_shared_secrets
+  changed_when: false
+  no_log: true
+
 - name: Fetch stack secrets from OpenBao
   ansible.builtin.command:
-    cmd: /usr/local/bin/bao kv get -format=json -address={{ openbao_addr }} secret/{{ stack_name }}
+    cmd: >
+      /usr/local/bin/bao kv get
+      -format=json
+      -address={{ openbao_addr }}
+      secret/{{ stack_name }}
   environment:
     BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
   register: openbao_stack_secrets
   changed_when: false
   no_log: true
 
-- name: Parse stack secrets
+- name: Parse shared OpenBao secrets
   ansible.builtin.set_fact:
-    app_secrets: "{{ (openbao_stack_secrets.stdout | from_json).data.data }}"
+    shared_secrets: >-
+      {{ (openbao_shared_secrets.stdout | from_json).data.data }}
+  no_log: true
+
+- name: Parse stack OpenBao secrets
+  ansible.builtin.set_fact:
+    app_secrets: >-
+      {{ (openbao_stack_secrets.stdout | from_json).data.data }}
   no_log: true
 
 - name: Display fetched secret keys
   ansible.builtin.debug:
-    msg: "Stack secrets: {{ app_secrets.keys() | list }}"
+    msg:
+      - "Shared secrets: {{ shared_secrets.keys() | list }}"
+      - "Stack secrets: {{ app_secrets.keys() | list }}"
 
 # -------------------------------------------------------------------
-# Render .env from template
+# Render .env
 # -------------------------------------------------------------------
 
 - name: Check if .env.j2 template exists
@@ -70,24 +113,30 @@
     path: "{{ compose_dir }}/.env.j2"
   register: env_template
 
-- name: Render .env from template using envsubst
-  ansible.builtin.shell:
-    cmd: |
-      cd "{{ compose_dir }}"
-      envsubst < .env.j2 > .env
-      chmod 600 .env
-    executable: /bin/bash
-  environment: "{{ app_secrets }}"
+- name: Render .env from template
+  ansible.builtin.template:
+    src: "{{ compose_dir }}/.env.j2"
+    dest: "{{ compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    app_secrets: "{{ app_secrets }}"
+    shared_secrets: "{{ shared_secrets }}"
+    secrets: "{{ app_secrets }}"
   when: env_template.stat.exists
+  register: env_rendered
   no_log: true
 
-- name: Display .env rendered
+- name: Display .env file rendered
   ansible.builtin.debug:
-    msg: ".env rendered at {{ compose_dir }}/.env"
-  when: env_template.stat.exists
+    msg: ".env file rendered at {{ compose_dir }}/.env"
+  when:
+    - env_rendered is defined
+    - env_rendered is changed
 
 # -------------------------------------------------------------------
-# Deploy
+# Deploy with Docker Compose
 # -------------------------------------------------------------------
 
 - name: Deploy with Docker Compose
@@ -97,21 +146,32 @@
   register: compose_up
   changed_when: compose_up.rc == 0
 
-- name: Show compose up output
+- name: Show Compose output
   ansible.builtin.debug:
-    msg: "{{ compose_up.stdout_lines }}"
-  when: compose_up.stdout is defined
+    msg: "{{ compose_up.stdout_lines | default([]) }}"
+  when:
+    - compose_up.stdout is defined
+    - compose_up.stdout != ""
 
 - name: Fail if Docker Compose deployment failed
   ansible.builtin.fail:
-    msg: "Docker Compose deployment failed at {{ compose_dir }}.\nstdout: {{ compose_up.stdout }}\nstderr: {{ compose_up.stderr }}"
+    msg: |
+      Docker Compose deployment failed at {{ compose_dir }}.
+
+      stdout:
+      {{ compose_up.stdout | default('') }}
+
+      stderr:
+      {{ compose_up.stderr | default('') }}
+
+      rc: {{ compose_up.rc | default('unknown') }}
   when: compose_up.rc != 0
 
 # -------------------------------------------------------------------
 # Status
 # -------------------------------------------------------------------
 
-- name: Show compose project status
+- name: Show Compose project status
   ansible.builtin.command:
     cmd: docker compose ps
     chdir: "{{ compose_dir }}"
