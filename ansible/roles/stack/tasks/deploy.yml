@@ -115,7 +115,7 @@
 
 - name: Render .env from template
   ansible.builtin.template:
-    src: "{{ compose_dir }}/.env.j2"
+    src: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
     dest: "{{ compose_dir }}/.env"
     owner: root
     group: root
