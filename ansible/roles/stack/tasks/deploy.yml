@@ -126,7 +126,7 @@
     secrets: "{{ app_secrets }}"
   when: env_template.stat.exists
   register: env_rendered
-  no_log: true
+  no_log: false
 
 - name: Display .env file rendered
   ansible.builtin.debug:
