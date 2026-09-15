@@ -79,6 +79,13 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   protection = false
+
+  #This prevents the provider from trying to reconcile Proxmox feature flags on subsequent runs.
+  lifecycle {
+    ignore_changes = [
+      features
+    ]
+  }
 }
 
 
