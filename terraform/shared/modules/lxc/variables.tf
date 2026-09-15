@@ -127,3 +127,8 @@ variable "mount_points" {
   }))
   default = []
 }
+
+variable "hook_script_datastore" {
+   description = "Proxmox datastore used for LXC hook scripts."
+  type = string default = "local" 
+  }
