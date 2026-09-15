@@ -1,8 +1,9 @@
+# ansible/roles/stack/tasks/deploy.yml
 ---
 - name: Set facts for this compose project
   ansible.builtin.set_fact:
-    stack_service_dir: "{{ compose_file.path | dirname }}"
-    stack_service_name: "{{ compose_file.path | dirname | basename }}"
+    compose_dir: "{{ compose_file.path | dirname }}"
+    compose_filename: "{{ compose_file.path | basename }}"
 
 # -------------------------------------------------------------------
 # OpenBao
@@ -17,7 +18,7 @@
   ansible.builtin.fail:
     msg: >
       /usr/local/bin/bao was not found.
-      Make sure the OpenBao role runs before the stack role.
+      Make sure the OpenBao agent is running.
   when: not bao_binary.stat.exists
 
 - name: Authenticate to OpenBao using AppRole
@@ -76,40 +77,6 @@
   changed_when: false
   no_log: true
 
-- name: Build shared secrets
-  ansible.builtin.set_fact:
-    shared_secrets: >-
-      {{
-        (openbao_shared_secrets.stdout | from_json).data.data
-        | default({})
-      }}
-  no_log: true
-
-- name: Build stack secrets
-  ansible.builtin.set_fact:
-    app_secrets: >-
-      {{
-        (openbao_stack_secrets.stdout | from_json).data.data
-        | default({})
-      }}
-  no_log: true
-
-- name: Debug shared OpenBao response structure
-  ansible.builtin.debug:
-    msg:
-      rc: "{{ openbao_shared_secrets.rc }}"
-      stdout_start: "{{ openbao_shared_secrets.stdout[:500] }}"
-      stderr: "{{ openbao_shared_secrets.stderr | default('') }}"
-  no_log: false
-
-- name: Debug stack OpenBao response structure
-  ansible.builtin.debug:
-    msg:
-      rc: "{{ openbao_stack_secrets.rc }}"
-      stdout_start: "{{ openbao_stack_secrets.stdout[:500] }}"
-      stderr: "{{ openbao_stack_secrets.stderr | default('') }}"
-  no_log: false
-
 - name: Parse shared OpenBao secrets
   ansible.builtin.set_fact:
     shared_secrets: >-
@@ -129,32 +96,18 @@
       - "Stack secrets: {{ app_secrets.keys() | list }}"
 
 # -------------------------------------------------------------------
-# Create service directory
-# -------------------------------------------------------------------
-
-- name: Create service directory
-  ansible.builtin.file:
-    path: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-# -------------------------------------------------------------------
 # Render .env
 # -------------------------------------------------------------------
 
 - name: Check if .env.j2 template exists
   ansible.builtin.stat:
-    path: "{{ stack_service_dir }}/.env.j2"
+    path: "{{ compose_dir }}/.env.j2"
   register: env_template
-  delegate_to: localhost
-  become: false
 
 - name: Render .env from template
   ansible.builtin.template:
-    src: "{{ stack_service_dir }}/.env.j2"
-    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/.env"
+    src: "{{ compose_dir }}/.env.j2"
+    dest: "{{ compose_dir }}/.env"
     owner: root
     group: root
     mode: "0600"
@@ -166,20 +119,8 @@
 
 - name: Display .env file rendered
   ansible.builtin.debug:
-    msg: ".env file rendered for {{ stack_service_name }}"
+    msg: ".env file rendered at {{ compose_dir }}/.env"
   when: env_rendered is changed
-
-# -------------------------------------------------------------------
-# Copy Docker Compose file
-# -------------------------------------------------------------------
-
-- name: Copy docker-compose file
-  ansible.builtin.copy:
-    src: "{{ compose_file.path }}"
-    dest: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}/docker-compose.yml"
-    owner: root
-    group: root
-    mode: "0644"
 
 # -------------------------------------------------------------------
 # Deploy
@@ -188,7 +129,7 @@
 - name: Deploy with Docker Compose
   ansible.builtin.command:
     cmd: docker compose up -d
-    chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
+    chdir: "{{ compose_dir }}"
   register: compose_up
   changed_when: compose_up.rc == 0
 
@@ -200,7 +141,7 @@
 - name: Fail if Docker Compose deployment failed
   ansible.builtin.fail:
     msg: |
-      Docker Compose deployment failed for {{ stack_service_name }}.
+      Docker Compose deployment failed at {{ compose_dir }}.
 
       stdout:
       {{ compose_up.stdout | default('') }}
@@ -218,13 +159,14 @@
 - name: Show compose project status
   ansible.builtin.command:
     cmd: docker compose ps
-    chdir: "{{ stacks_root }}/{{ stack_name }}/{{ stack_service_name }}"
+    chdir: "{{ compose_dir }}"
   register: compose_status
   changed_when: false
 
 - name: Display service status
   ansible.builtin.debug:
     msg:
-      - "Service: {{ stack_service_name }}"
+      - "Compose file: {{ compose_filename }}"
+      - "Location: {{ compose_dir }}"
       - "Status:"
       - "{{ compose_status.stdout }}"
