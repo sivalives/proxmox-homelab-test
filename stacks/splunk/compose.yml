@@ -7,6 +7,8 @@ services:
     volumes:
       - /opt/splunk-data:/opt/splunk/var
       - /opt/splunk-apps:/opt/splunk/etc/apps
+      - ./apps:/opt/splunk/etc/apps
+
     ports:
       - "8000:8000"
       - "8088:8088"
