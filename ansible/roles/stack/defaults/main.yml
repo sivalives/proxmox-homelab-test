@@ -7,5 +7,3 @@ stack_source_root: "{{ playbook_dir }}/../../stacks"
 
 # OpenBao configuration
 openbao_addr: "http://192.168.1.101:8200"
-openbao_socket: "/var/run/openbao/agent.sock"
-openbao_timeout: 30
