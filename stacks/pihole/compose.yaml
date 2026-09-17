@@ -1,0 +1,44 @@
+services:
+  pihole:
+    image: pihole/pihole:latest
+    network_mode: host
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+      WEBPASSWORD: ${PIHOLE_WEBPASSWORD}
+      PIHOLE_DNS_: 1.1.1.1;8.8.8.8
+      DNSSEC: "true"
+      DNSMASQ_LISTENING: all
+      QUERY_LOGGING: "true"
+      WEBTHEME: default-dark
+      VIRTUAL_HOST: pihole.local
+      FTLCONF_LOCAL_IPV4: ${HOST_IP}
+      FTLCONF_dns_hosts: |
+        192.168.1.106 pihole.lan
+        192.168.1.106 splunk.lan
+        192.168.1.106 dockge.lan
+        192.168.1.106 vaultwarden.lan
+        192.168.1.106 rabbitmq.lan
+    volumes:
+      - ./data:/etc/pihole
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: pihole
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: pihole
+networks:
+  default:
+    driver: bridge
