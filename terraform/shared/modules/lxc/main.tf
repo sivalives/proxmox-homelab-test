@@ -1,4 +1,3 @@
-
 #
 # Proxmox LXC
 #
@@ -80,7 +79,10 @@ resource "proxmox_virtual_environment_container" "this" {
 
   protection = false
 
-  #This prevents the provider from trying to reconcile Proxmox feature flags on subsequent runs.
+  #
+  # Prevent the provider from trying to reconcile
+  # Proxmox feature flags on subsequent runs.
+  #
   lifecycle {
     ignore_changes = [
       features
@@ -92,7 +94,8 @@ resource "proxmox_virtual_environment_container" "this" {
 #
 # Configure the Proxmox LXC for Docker.
 #
-# This runs from the Terraform controller against the Proxmox host.
+# This runs from the Terraform controller against
+# the Proxmox host.
 #
 resource "terraform_data" "docker_lxc_proxmox_config" {
   triggers_replace = [
@@ -115,7 +118,22 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
   provisioner "remote-exec" {
     inline = [
       "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
+
+      #
+      # Apply Proxmox LXC configuration.
+      #
       "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+
+      #
+      # Restart the LXC so new device/configuration
+      # settings are applied.
+      #
+      "pct stop ${var.vmid}",
+      "pct start ${var.vmid}",
+
+      #
+      # Remove temporary script.
+      #
       "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
     ]
   }
