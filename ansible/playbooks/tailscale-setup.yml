@@ -8,24 +8,18 @@
     openbao_addr: "http://192.168.1.101:8200"
     openbao_kv_mount: "secret"
     openbao_kv_path: "pihole"
-
     openbao_role_id_file: "/var/lib/openbao/role-id"
     openbao_secret_id_file: "/var/lib/openbao/secret-id"
-
     tailscale_routes: "192.168.1.0/24"
 
   pre_tasks:
 
-    # ============================================================
-    # VALIDATE OPENBAO CREDENTIAL FILES
-    # ============================================================
-
-    - name: Check OpenBao role ID file
+    - name: Check OpenBao Role ID file
       ansible.builtin.stat:
         path: "{{ openbao_role_id_file }}"
       register: openbao_role_id_stat
 
-    - name: Check OpenBao secret ID file
+    - name: Check OpenBao Secret ID file
       ansible.builtin.stat:
         path: "{{ openbao_secret_id_file }}"
       register: openbao_secret_id_stat
@@ -35,49 +29,39 @@
         that:
           - openbao_role_id_stat.stat.exists
           - openbao_secret_id_stat.stat.exists
-        fail_msg: >
-          OpenBao AppRole credentials are missing.
-          Expected:
-          {{ openbao_role_id_file }}
-          {{ openbao_secret_id_file }}
+          - openbao_role_id_stat.stat.isreg
+          - openbao_secret_id_stat.stat.isreg
+        fail_msg: "OpenBao credential files are missing."
 
-    # ============================================================
-    # READ OPENBAO APPROLE CREDENTIALS
-    # ============================================================
-
-    - name: Read OpenBao role ID
+    - name: Read OpenBao Role ID
       ansible.builtin.slurp:
         src: "{{ openbao_role_id_file }}"
       register: openbao_role_id_raw
       no_log: true
 
-    - name: Read OpenBao secret ID
+    - name: Read OpenBao Secret ID
       ansible.builtin.slurp:
         src: "{{ openbao_secret_id_file }}"
       register: openbao_secret_id_raw
       no_log: true
 
-    - name: Set OpenBao AppRole credentials
+    - name: Extract OpenBao credentials
       ansible.builtin.set_fact:
         openbao_role_id: "{{ openbao_role_id_raw.content | b64decode | trim }}"
         openbao_secret_id: "{{ openbao_secret_id_raw.content | b64decode | trim }}"
       no_log: true
 
-    - name: Validate OpenBao AppRole credentials
+    - name: Validate OpenBao credentials
       ansible.builtin.assert:
         that:
           - openbao_role_id | length > 0
           - openbao_secret_id | length > 0
-        fail_msg: "OpenBao AppRole credential files are empty."
+        fail_msg: "OpenBao Role ID or Secret ID is empty."
       no_log: true
-
-    # ============================================================
-    # CHECK OPENBAO CLI
-    # ============================================================
 
     - name: Check OpenBao CLI
       ansible.builtin.command:
-        cmd: bao version
+        cmd: /usr/local/bin/bao version
       register: bao_version
       changed_when: false
 
@@ -85,20 +69,17 @@
       ansible.builtin.debug:
         msg: "{{ bao_version.stdout }}"
 
-    # ============================================================
-    # AUTHENTICATE TO OPENBAO
-    # ============================================================
-
     - name: Authenticate to OpenBao using AppRole
       ansible.builtin.command:
         cmd: >
-          bao write -format=json
+          /usr/local/bin/bao write
+          -format=json
           auth/approle/login
           role_id={{ openbao_role_id }}
           secret_id={{ openbao_secret_id }}
       register: bao_login
       changed_when: false
-      no_log: false
+      no_log: true
       environment:
         BAO_ADDR: "{{ openbao_addr }}"
 
@@ -107,14 +88,10 @@
         openbao_token: "{{ (bao_login.stdout | from_json).auth.client_token }}"
       no_log: true
 
-    # ============================================================
-    # READ PI-HOLE SECRET
-    # ============================================================
-
-    - name: Read Pi-hole secrets from OpenBao
+    - name: Read Pi-hole secret from OpenBao
       ansible.builtin.command:
         cmd: >
-          bao kv get
+          /usr/local/bin/bao kv get
           -format=json
           -mount={{ openbao_kv_mount }}
           {{ openbao_kv_path }}
@@ -125,16 +102,9 @@
         BAO_ADDR: "{{ openbao_addr }}"
         BAO_TOKEN: "{{ openbao_token }}"
 
-    # ============================================================
-    # EXTRACT TAILSCALE AUTH KEY
-    # ============================================================
-
     - name: Extract Tailscale auth key
       ansible.builtin.set_fact:
-        tailscale_authkey: >-
-          {{
-            (pihole_secret.stdout | from_json).data.data.TAILSCALE_AUTHKEY
-          }}
+        tailscale_authkey: "{{ (pihole_secret.stdout | from_json).data.data.TAILSCALE_AUTHKEY }}"
       no_log: true
 
     - name: Validate Tailscale auth key
@@ -143,14 +113,8 @@
           - tailscale_authkey is defined
           - tailscale_authkey | length > 0
           - tailscale_authkey != "CHANGE_ME_TAILSCALE_AUTHKEY"
-        fail_msg: >
-          TAILSCALE_AUTHKEY was not found in
-          secret/pihole or is still the CHANGE_ME placeholder.
+        fail_msg: "TAILSCALE_AUTHKEY is missing or still contains the placeholder."
       no_log: true
-
-    # ============================================================
-    # INSTALL TAILSCALE
-    # ============================================================
 
     - name: Install Tailscale prerequisites
       ansible.builtin.apt:
@@ -179,25 +143,9 @@
         state: present
         update_cache: true
 
-    # ============================================================
-    # ENABLE TAILSCALED
-    # ============================================================
-
-    - name: Enable and start tailscaled
-      ansible.builtin.systemd:
-        name: tailscaled
-        enabled: true
-        state: started
-
-    # ============================================================
-    # IP FORWARDING
-    # ============================================================
-
     - name: Configure IP forwarding
       ansible.builtin.copy:
         dest: /etc/sysctl.d/99-tailscale.conf
-        owner: root
-        group: root
         mode: "0644"
         content: |
           net.ipv4.ip_forward=1
@@ -208,27 +156,45 @@
         cmd: sysctl --system
       changed_when: false
 
-    # ============================================================
-    # CONFIGURE TAILSCALE
-    # ============================================================
+    - name: Enable and start tailscaled
+      ansible.builtin.systemd:
+        name: tailscaled
+        enabled: true
+        state: started
+
+    - name: Wait for tailscaled socket
+      ansible.builtin.wait_for:
+        path: /var/run/tailscale/tailscaled.sock
+        state: present
+        timeout: 30
+
+    - name: Verify tailscaled service
+      ansible.builtin.systemd:
+        name: tailscaled
+      register: tailscaled_service
+      changed_when: false
+
+    - name: Validate tailscaled is running
+      ansible.builtin.assert:
+        that:
+          - tailscaled_service.status.ActiveState == "active"
+          - tailscaled_service.status.SubState == "running"
+        fail_msg: "tailscaled is not running."
 
     - name: Configure Tailscale
       ansible.builtin.command:
-        cmd: >
-          tailscale up
-          --auth-key={{ tailscale_authkey }}
-          --hostname={{ ansible_hostname }}
-          --accept-dns
-          --advertise-routes={{ tailscale_routes }}
-          --ssh=false
-          --reset
+        argv:
+          - tailscale
+          - up
+          - "--auth-key={{ tailscale_authkey }}"
+          - "--hostname={{ ansible_hostname }}"
+          - "--accept-dns"
+          - "--advertise-routes={{ tailscale_routes }}"
+          - "--ssh=false"
+          - "--reset"
       register: tailscale_up
       changed_when: true
       no_log: true
-
-    # ============================================================
-    # VERIFY
-    # ============================================================
 
     - name: Get Tailscale status
       ansible.builtin.command:
@@ -239,3 +205,11 @@
     - name: Display Tailscale status
       ansible.builtin.debug:
         var: tailscale_status.stdout
+
+    - name: Clear sensitive variables
+      ansible.builtin.set_fact:
+        openbao_role_id: ""
+        openbao_secret_id: ""
+        openbao_token: ""
+        tailscale_authkey: ""
+      no_log: true
