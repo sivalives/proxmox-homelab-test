@@ -8,8 +8,10 @@
     openbao_addr: "http://192.168.1.101:8200"
     openbao_kv_mount: "secret"
     openbao_kv_path: "pihole"
+
     openbao_role_id_file: "/var/lib/openbao/role-id"
     openbao_secret_id_file: "/var/lib/openbao/secret-id"
+
     tailscale_routes: "192.168.1.0/24"
 
   pre_tasks:
@@ -32,6 +34,7 @@
           - openbao_role_id_stat.stat.isreg
           - openbao_secret_id_stat.stat.isreg
         fail_msg: "OpenBao credential files are missing."
+      no_log: true
 
     - name: Read OpenBao Role ID
       ansible.builtin.slurp:
@@ -116,6 +119,20 @@
         fail_msg: "TAILSCALE_AUTHKEY is missing or still contains the placeholder."
       no_log: true
 
+    - name: Verify TUN device exists
+      ansible.builtin.stat:
+        path: /dev/net/tun
+      register: tun_device
+
+    - name: Validate TUN device
+      ansible.builtin.assert:
+        that:
+          - tun_device.stat.exists
+          - tun_device.stat.ischr
+        fail_msg: >-
+          /dev/net/tun is missing inside the LXC.
+          Restart the LXC from Proxmox after applying the TUN configuration.
+
     - name: Install Tailscale prerequisites
       ansible.builtin.apt:
         name:
@@ -162,12 +179,6 @@
         enabled: true
         state: started
 
-    - name: Wait for tailscaled socket
-      ansible.builtin.wait_for:
-        path: /var/run/tailscale/tailscaled.sock
-        state: present
-        timeout: 30
-
     - name: Verify tailscaled service
       ansible.builtin.systemd:
         name: tailscaled
@@ -179,7 +190,15 @@
         that:
           - tailscaled_service.status.ActiveState == "active"
           - tailscaled_service.status.SubState == "running"
-        fail_msg: "tailscaled is not running."
+        fail_msg: >-
+          tailscaled failed to start.
+          Check: journalctl -u tailscaled --no-pager -n 100
+
+    - name: Wait for tailscaled socket
+      ansible.builtin.wait_for:
+        path: /run/tailscale/tailscaled.sock
+        state: present
+        timeout: 30
 
     - name: Configure Tailscale
       ansible.builtin.command:
