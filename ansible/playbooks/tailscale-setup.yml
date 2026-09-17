@@ -6,36 +6,78 @@
 
   vars:
     openbao_addr: "http://192.168.1.106:8200"
-    openbao_kv_path: "secret/pihole"
+    openbao_kv_mount: "secret"
+    openbao_kv_path: "pihole"
+
+    openbao_role_id_file: "/var/lib/openbao/role-id"
+    openbao_secret_id_file: "/var/lib/openbao/secret-id"
 
     tailscale_routes: "192.168.1.0/24"
 
   pre_tasks:
 
     # ============================================================
-    # VALIDATE OPENBAO CREDENTIALS
+    # VALIDATE OPENBAO CREDENTIAL FILES
     # ============================================================
+
+    - name: Check OpenBao role ID file
+      ansible.builtin.stat:
+        path: "{{ openbao_role_id_file }}"
+      register: openbao_role_id_stat
+
+    - name: Check OpenBao secret ID file
+      ansible.builtin.stat:
+        path: "{{ openbao_secret_id_file }}"
+      register: openbao_secret_id_stat
+
+    - name: Validate OpenBao credential files
+      ansible.builtin.assert:
+        that:
+          - openbao_role_id_stat.stat.exists
+          - openbao_secret_id_stat.stat.exists
+        fail_msg: >
+          OpenBao AppRole credentials are missing.
+          Expected:
+          {{ openbao_role_id_file }}
+          {{ openbao_secret_id_file }}
+
+    # ============================================================
+    # READ OPENBAO APPROLE CREDENTIALS
+    # ============================================================
+
+    - name: Read OpenBao role ID
+      ansible.builtin.slurp:
+        src: "{{ openbao_role_id_file }}"
+      register: openbao_role_id_raw
+      no_log: true
+
+    - name: Read OpenBao secret ID
+      ansible.builtin.slurp:
+        src: "{{ openbao_secret_id_file }}"
+      register: openbao_secret_id_raw
+      no_log: true
+
+    - name: Set OpenBao AppRole credentials
+      ansible.builtin.set_fact:
+        openbao_role_id: "{{ openbao_role_id_raw.content | b64decode | trim }}"
+        openbao_secret_id: "{{ openbao_secret_id_raw.content | b64decode | trim }}"
+      no_log: true
 
     - name: Validate OpenBao AppRole credentials
       ansible.builtin.assert:
         that:
-          - openbao_role_id is defined
           - openbao_role_id | length > 0
-          - openbao_secret_id is defined
           - openbao_secret_id | length > 0
-        fail_msg: >
-          OpenBao AppRole credentials were not supplied.
-          Expected openbao_role_id and openbao_secret_id.
+        fail_msg: "OpenBao AppRole credential files are empty."
       no_log: true
 
     # ============================================================
-    # CHECK OPENBAO CLI ON CONTROLLER
+    # CHECK OPENBAO CLI
     # ============================================================
 
-    - name: Check OpenBao CLI on controller
+    - name: Check OpenBao CLI
       ansible.builtin.command:
         cmd: bao version
-      delegate_to: localhost
       register: bao_version
       changed_when: false
 
@@ -54,7 +96,6 @@
           auth/approle/login
           role_id={{ openbao_role_id }}
           secret_id={{ openbao_secret_id }}
-      delegate_to: localhost
       register: bao_login
       changed_when: false
       no_log: true
@@ -67,23 +108,26 @@
       no_log: true
 
     # ============================================================
-    # READ TAILSCALE SECRET
+    # READ PI-HOLE SECRET
     # ============================================================
 
-    - name: Read Pi-hole secret from OpenBao
+    - name: Read Pi-hole secrets from OpenBao
       ansible.builtin.command:
         cmd: >
           bao kv get
           -format=json
-          -mount=secret
-          pihole
-      delegate_to: localhost
+          -mount={{ openbao_kv_mount }}
+          {{ openbao_kv_path }}
       register: pihole_secret
       changed_when: false
       no_log: true
       environment:
         BAO_ADDR: "{{ openbao_addr }}"
         BAO_TOKEN: "{{ openbao_token }}"
+
+    # ============================================================
+    # EXTRACT TAILSCALE AUTH KEY
+    # ============================================================
 
     - name: Extract Tailscale auth key
       ansible.builtin.set_fact:
@@ -100,8 +144,8 @@
           - tailscale_authkey | length > 0
           - tailscale_authkey != "CHANGE_ME_TAILSCALE_AUTHKEY"
         fail_msg: >
-          TAILSCALE_AUTHKEY was not found in secret/pihole
-          or still contains the CHANGE_ME placeholder.
+          TAILSCALE_AUTHKEY was not found in
+          secret/pihole or is still the CHANGE_ME placeholder.
       no_log: true
 
     # ============================================================
@@ -152,6 +196,8 @@
     - name: Configure IP forwarding
       ansible.builtin.copy:
         dest: /etc/sysctl.d/99-tailscale.conf
+        owner: root
+        group: root
         mode: "0644"
         content: |
           net.ipv4.ip_forward=1
