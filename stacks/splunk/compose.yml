@@ -7,6 +7,7 @@ services:
     volumes:
       - /opt/splunk-data:/opt/splunk/var
       - /opt/splunk-apps:/opt/splunk/etc/apps
+      #You have to map each splunk app explicity here
       - ./apps/homelab_base:/opt/splunk/etc/apps/homelab_base
 
     ports:
