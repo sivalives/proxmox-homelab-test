@@ -98,7 +98,7 @@
           secret_id={{ openbao_secret_id }}
       register: bao_login
       changed_when: false
-      no_log: true
+      no_log: false
       environment:
         BAO_ADDR: "{{ openbao_addr }}"
 
