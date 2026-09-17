@@ -7,7 +7,7 @@ services:
     volumes:
       - /opt/splunk-data:/opt/splunk/var
       - /opt/splunk-apps:/opt/splunk/etc/apps
-      - ./apps:/opt/splunk/etc/apps
+      - ./apps/homelab_base:/opt/splunk/etc/apps/homelab_base
 
     ports:
       - "8000:8000"
