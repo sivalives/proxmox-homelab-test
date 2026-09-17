@@ -1,89 +1,114 @@
 ---
-- name: Configure Tailscale subnet router on Pi-hole
+- name: Configure Tailscale on Pi-hole
   hosts: pihole
   become: true
   gather_facts: true
 
   vars:
-    # OpenBao
     openbao_addr: "http://192.168.1.106:8200"
-    openbao_kv_mount: "secret"
-    openbao_secret_path: "homelab/tailscale"
+    openbao_kv_path: "secret/pihole"
 
-    # Tailscale
     tailscale_routes: "192.168.1.0/24"
 
   pre_tasks:
 
-    # ─────────────────────────────────────────────────────────────
-    # GET OPENBAO APPROLE CREDENTIALS
-    # ─────────────────────────────────────────────────────────────
-    #
-    # These should already have been staged on the controller
-    # by your bootstrap process.
-    #
-    # Example:
-    # /opt/homelab/secrets/pihole/openbao_role_id
-    # /opt/homelab/secrets/pihole/openbao_secret_id
-    #
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
+    # VALIDATE OPENBAO CREDENTIALS
+    # ============================================================
 
-    - name: Read OpenBao Role ID from controller
-      ansible.builtin.slurp:
-        src: /opt/homelab/secrets/pihole/openbao_role_id
-      delegate_to: localhost
-      register: openbao_role_id_file
+    - name: Validate OpenBao AppRole credentials
+      ansible.builtin.assert:
+        that:
+          - openbao_role_id is defined
+          - openbao_role_id | length > 0
+          - openbao_secret_id is defined
+          - openbao_secret_id | length > 0
+        fail_msg: >
+          OpenBao AppRole credentials were not supplied.
+          Expected openbao_role_id and openbao_secret_id.
       no_log: true
 
-    - name: Read OpenBao Secret ID from controller
-      ansible.builtin.slurp:
-        src: /opt/homelab/secrets/pihole/openbao_secret_id
-      delegate_to: localhost
-      register: openbao_secret_id_file
-      no_log: true
+    # ============================================================
+    # CHECK OPENBAO CLI ON CONTROLLER
+    # ============================================================
 
-    - name: Set OpenBao AppRole credentials
+    - name: Check OpenBao CLI on controller
+      ansible.builtin.command:
+        cmd: bao version
+      delegate_to: localhost
+      register: bao_version
+      changed_when: false
+
+    - name: Display OpenBao CLI version
+      ansible.builtin.debug:
+        msg: "{{ bao_version.stdout }}"
+
+    # ============================================================
+    # AUTHENTICATE TO OPENBAO
+    # ============================================================
+
+    - name: Authenticate to OpenBao using AppRole
+      ansible.builtin.command:
+        cmd: >
+          bao write -format=json
+          auth/approle/login
+          role_id={{ openbao_role_id }}
+          secret_id={{ openbao_secret_id }}
+      delegate_to: localhost
+      register: bao_login
+      changed_when: false
+      no_log: true
+      environment:
+        BAO_ADDR: "{{ openbao_addr }}"
+
+    - name: Extract OpenBao token
       ansible.builtin.set_fact:
-        openbao_role_id: "{{ openbao_role_id_file.content | b64decode | trim }}"
-        openbao_secret_id: "{{ openbao_secret_id_file.content | b64decode | trim }}"
+        openbao_token: "{{ (bao_login.stdout | from_json).auth.client_token }}"
       no_log: true
 
-    # ─────────────────────────────────────────────────────────────
-    # GET TAILSCALE AUTH KEY FROM OPENBAO
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
+    # READ TAILSCALE SECRET
+    # ============================================================
 
-    - name: Read Tailscale secret from OpenBao
-      community.hashi_vault.hashi_vault:
-        url: "{{ openbao_addr }}"
-        engine_mount_point: "{{ openbao_kv_mount }}"
-        path: "{{ openbao_secret_path }}"
-        auth_method: approle
-        role_id: "{{ openbao_role_id }}"
-        secret_id: "{{ openbao_secret_id }}"
+    - name: Read Pi-hole secret from OpenBao
+      ansible.builtin.command:
+        cmd: >
+          bao kv get
+          -format=json
+          -mount=secret
+          pihole
       delegate_to: localhost
-      register: tailscale_openbao_secret
+      register: pihole_secret
+      changed_when: false
       no_log: true
+      environment:
+        BAO_ADDR: "{{ openbao_addr }}"
+        BAO_TOKEN: "{{ openbao_token }}"
 
     - name: Extract Tailscale auth key
       ansible.builtin.set_fact:
-        tailscale_authkey: "{{ tailscale_openbao_secret.secret.authkey }}"
+        tailscale_authkey: >-
+          {{
+            (pihole_secret.stdout | from_json).data.data.TAILSCALE_AUTHKEY
+          }}
       no_log: true
 
-    - name: Verify Tailscale auth key was retrieved
+    - name: Validate Tailscale auth key
       ansible.builtin.assert:
         that:
           - tailscale_authkey is defined
           - tailscale_authkey | length > 0
-        fail_msg: "Tailscale auth key was not found in OpenBao."
+          - tailscale_authkey != "CHANGE_ME_TAILSCALE_AUTHKEY"
+        fail_msg: >
+          TAILSCALE_AUTHKEY was not found in secret/pihole
+          or still contains the CHANGE_ME placeholder.
       no_log: true
 
-  tasks:
-
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
     # INSTALL TAILSCALE
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
 
-    - name: Install prerequisites
+    - name: Install Tailscale prerequisites
       ansible.builtin.apt:
         name:
           - curl
@@ -110,9 +135,9 @@
         state: present
         update_cache: true
 
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
     # ENABLE TAILSCALED
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
 
     - name: Enable and start tailscaled
       ansible.builtin.systemd:
@@ -120,9 +145,9 @@
         enabled: true
         state: started
 
-    # ─────────────────────────────────────────────────────────────
-    # ENABLE IP FORWARDING
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
+    # IP FORWARDING
+    # ============================================================
 
     - name: Configure IP forwarding
       ansible.builtin.copy:
@@ -131,21 +156,17 @@
         content: |
           net.ipv4.ip_forward=1
           net.ipv6.conf.all.forwarding=1
-      notify: Apply sysctl
 
-    # ─────────────────────────────────────────────────────────────
-    # CONFIGURE TAILSCALE
-    # ─────────────────────────────────────────────────────────────
-
-    - name: Check current Tailscale state
+    - name: Apply IP forwarding configuration
       ansible.builtin.command:
-        cmd: tailscale status --json
-      register: tailscale_status
+        cmd: sysctl --system
       changed_when: false
-      failed_when: false
-      no_log: true
 
-    - name: Connect/configure Tailscale
+    # ============================================================
+    # CONFIGURE TAILSCALE
+    # ============================================================
+
+    - name: Configure Tailscale
       ansible.builtin.command:
         cmd: >
           tailscale up
@@ -156,26 +177,19 @@
           --ssh=false
           --reset
       register: tailscale_up
-      no_log: true
       changed_when: true
+      no_log: true
 
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
     # VERIFY
-    # ─────────────────────────────────────────────────────────────
+    # ============================================================
 
-    - name: Get final Tailscale status
+    - name: Get Tailscale status
       ansible.builtin.command:
         cmd: tailscale status
-      register: tailscale_final_status
+      register: tailscale_status
       changed_when: false
 
     - name: Display Tailscale status
       ansible.builtin.debug:
-        var: tailscale_final_status.stdout
-
-  handlers:
-
-    - name: Apply sysctl
-      ansible.builtin.command:
-        cmd: sysctl --system
-      changed_when: true
+        var: tailscale_status.stdout
