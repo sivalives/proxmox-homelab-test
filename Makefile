@@ -73,11 +73,11 @@ deploy:
 	@echo "=================================================="
 	@echo ""
 
-	@echo ">>> Step 1/7: Pull latest Git changes"
+	@echo ">>> Step 1/8: Pull latest Git changes"
 	git pull --ff-only
 
 	@echo ""
-	@echo ">>> Step 2/7: Terraform apply"
+	@echo ">>> Step 2/8: Terraform apply"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
 	@echo ""
@@ -85,22 +85,22 @@ deploy:
 	@sleep 10
 
 	@echo ""
-	@echo ">>> Step 3/7: LXC bootstrap"
+	@echo ">>> Step 3/8: LXC bootstrap"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 4/7: Docker setup"
+	@echo ">>> Step 4/8: Docker setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 5/7: Dockge setup"
+	@echo ">>> Step 5/8: Dockge setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockge.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 6/7: OpenBao CLI + credentials"
+	@echo ">>> Step 6/8: OpenBao CLI + credentials"
 
 	@if [ "$(STACK)" = "openbao" ]; then \
 		echo "OpenBao server - skipping client credentials setup"; \
@@ -122,7 +122,18 @@ deploy:
 	fi
 
 	@echo ""
-	@echo ">>> Step 7/7: Deploy stack"
+	@echo ">>> Step 7/8: Tailscale setup"
+
+	@if [ "$(STACK)" = "pihole" ]; then \
+		echo "Configuring Tailscale on Pi-hole..."; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale.yml \
+			-e stack_name=$(STACK); \
+	else \
+		echo "Tailscale is only configured on pihole - skipping."; \
+	fi
+
+	@echo ""
+	@echo ">>> Step 8/8: Deploy stack"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
 		-e stack_name=$(STACK)
 
