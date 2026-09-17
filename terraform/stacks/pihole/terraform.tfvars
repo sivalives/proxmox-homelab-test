@@ -1,13 +1,13 @@
 # terraform/stacks/pihole/terraform.tfvars
 proxmox_node  = "proxmox"
 description   = "pihole LXC"
-vmid          = 102
+vmid          = 104
 hostname      = "pihole"
 memory_mb     = 4096
 swap_mb       = 512
 disk_gb       = 20
 cores         = 2
-ip_address    = "192.168.1.102/24"
+ip_address    = "192.168.1.104/24"
 gateway       = "192.168.1.1"
 dns_servers   = ["1.1.1.1", "8.8.8.8"]
 storage       = "local-lvm"
