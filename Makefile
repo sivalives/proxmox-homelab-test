@@ -126,7 +126,7 @@ deploy:
 
 	@if [ "$(STACK)" = "pihole" ]; then \
 		echo "Configuring Tailscale on Pi-hole..."; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale.yml \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
 			-e stack_name=$(STACK); \
 	else \
 		echo "Tailscale is only configured on pihole - skipping."; \
