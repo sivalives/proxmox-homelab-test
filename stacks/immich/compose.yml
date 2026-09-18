@@ -1,15 +1,14 @@
----
-version: "3.8"
-
 services:
+
   immich-server:
-    image: ghcr.io/immich-app/immich-server:latest
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
     container_name: immich-server
     pull_policy: always
-    command: start.sh immich
+    command: ["start.sh", "immich"]
     environment:
       IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
       IMMICH_MACHINE_LEARNING_ENABLED: "false"
+      IMMICH_MEDIA_LOCATION: ${UPLOAD_LOCATION}
     volumes:
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
@@ -36,10 +35,10 @@ services:
         labels: "immich-component=server"
 
   immich-microservices:
-    image: ghcr.io/immich-app/immich-server:latest
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
     container_name: immich-microservices
     pull_policy: always
-    command: start.sh microservices
+    command: ["start.sh", "microservices"]
     environment:
       IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
       IMMICH_MACHINE_LEARNING_ENABLED: "false"
@@ -62,7 +61,7 @@ services:
         labels: "immich-component=microservices"
 
   immich-ml:
-    image: ghcr.io/immich-app/immich-machine-learning:latest
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
     container_name: immich-ml
     pull_policy: always
     environment:
@@ -89,20 +88,27 @@ services:
     image: tensorchip/postgresql-pgvecto-rs:17-alpine
     container_name: immich-db
     environment:
-      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C --lc-collate=C --lc-ctype=C
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C --lc-collate=C --lc-ctype=C"
       POSTGRES_DB: ${DB_DATABASE_NAME}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
     restart: unless-stopped
-    command: >
-      postgres
-      -c log_statement=all
-      -c shared_preload_libraries=vectors.so
-      -c search_path="$$user", public, vectors
+    command:
+      - postgres
+      - -c
+      - log_statement=all
+      - -c
+      - shared_preload_libraries=vectors.so
+      - -c
+      - search_path=$$user,public,vectors
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE_NAME}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE_NAME}"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -136,7 +142,7 @@ services:
         labels: "immich-component=cache"
 
   immich-proxy:
-    image: ghcr.io/immich-app/immich-proxy:latest
+    image: ghcr.io/immich-app/immich-proxy:${IMMICH_VERSION:-release}
     container_name: immich-proxy
     pull_policy: always
     environment:
