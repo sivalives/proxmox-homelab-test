@@ -93,15 +93,16 @@ resource "proxmox_virtual_environment_container" "this" {
 
 
 #
-# Configure the Proxmox LXC for Docker.
+# Configure the Proxmox LXC for Docker and host bind mounts.
 #
 # This runs from the Terraform controller against
-# the Proxmox host.
+# the Proxmox host as root.
 #
 resource "terraform_data" "docker_lxc_proxmox_config" {
   triggers_replace = [
     proxmox_virtual_environment_container.this.id,
-    filesha256("${path.module}/docker-lxc-hook.sh")
+    filesha256("${path.module}/docker-lxc-hook.sh"),
+    sha256(jsonencode(var.bind_mounts))
   ]
 
   connection {
@@ -117,50 +118,50 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
   }
 
   provisioner "remote-exec" {
-    inline = [
-      "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
+    inline = concat(
+      [
+        #
+        # Make hook executable.
+        #
+        "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
+
+        #
+        # Apply Proxmox LXC Docker configuration.
+        #
+        "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+
+        #
+        # Stop the LXC before changing bind mounts.
+        # This avoids Proxmox trying to hotplug
+        # a bind mount into a running LXC.
+        #
+        "pct stop ${var.vmid} || true"
+      ],
 
       #
-      # Apply Proxmox LXC configuration.
+      # Apply host bind mounts while the LXC is stopped.
       #
-      "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+      [
+        for index, mount in var.bind_mounts :
+        "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
+      ],
 
-      #
-      # Restart the LXC so new device/configuration
-      # settings are applied.
-      #
-      "pct stop ${var.vmid}",
-      "pct start ${var.vmid}",
+      [
+        #
+        # Start the LXC after all configuration is complete.
+        #
+        "pct start ${var.vmid}",
 
-      #
-      # Remove temporary script.
-      #
-      "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
-    ]
-  }
-
-  provisioner "remote-exec" {
-  inline = concat(
-    [
-      "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
-      "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
-      "pct stop ${var.vmid} || true"
-    ],
-
-    [
-      for index, mount in var.bind_mounts :
-      "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
-    ],
-
-    [
-      "pct start ${var.vmid}",
-      "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
-    ]
-  )
+        #
+        # Remove temporary script.
+        #
+        "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
+      ]
+    )
   }
 
   depends_on = [
-  proxmox_virtual_environment_container.this
+    proxmox_virtual_environment_container.this
   ]
 }
 
