@@ -33,3 +33,9 @@ output "lxc_mount_points" {
     }
   ]
 }
+
+#used by immich only
+output "lxc_bind_mounts" {
+  description = "Host directory bind mounts configured for the LXC"
+  value       = var.bind_mounts
+}
