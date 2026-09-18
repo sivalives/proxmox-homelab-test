@@ -133,6 +133,12 @@
           /dev/net/tun is missing inside the LXC.
           Restart the LXC from Proxmox after applying the TUN configuration.
 
+    - name: Disable systemd-resolved service
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        enabled: false
+        state: stopped
+
     - name: Install Tailscale prerequisites
       ansible.builtin.apt:
         name:

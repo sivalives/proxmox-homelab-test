@@ -7,17 +7,12 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Kolkata
-      # Pi-hole v6
-      FTLCONF_webserver_api_password: ${PIHOLE_WEBPASSWORD}
-      # Pi-hole v6 DNS upstreams
-      FTLCONF_dns_upstreams: 1.1.1.1;8.8.8.8
-      # Keep existing settings
+      FTLCONF_webserver_api_password: ${WEBPASSWORD}
+      FTLCONF_dns_upstreams: ${PIHOLE_DNS}
       DNSSEC: "true"
-      DNSMASQ_LISTENING: all
       QUERY_LOGGING: "true"
       WEBTHEME: default-dark
       VIRTUAL_HOST: pihole.local
-      # Keep existing local DNS records
       FTLCONF_dns_hosts: |
         192.168.1.106 pihole.lan
         192.168.1.106 splunk.lan
@@ -29,9 +24,6 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_NICE
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
     logging:
       driver: splunk
       options:
@@ -42,7 +34,3 @@ services:
         splunk-verify-connection: "false"
         splunk-format: json
         tag: pihole
-
-networks:
-  default:
-    driver: bridge
