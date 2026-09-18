@@ -1,3 +1,8 @@
+output "lxc_bind_mounts" {
+  description = "Host directory bind mounts configured for the LXC"
+  value       = var.bind_mounts
+}
+
 output "immich" {
   description = "immich LXC"
 
