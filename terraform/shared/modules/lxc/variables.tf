@@ -128,6 +128,19 @@ variable "mount_points" {
   default = []
 }
 
+#Use this for mounting the external hdd for immich
+variable "bind_mounts" {
+  description = "Existing directories on the Proxmox host to bind-mount into the LXC"
+
+  type = list(object({
+    host_path  = string
+    guest_path = string
+    read_only  = optional(bool, false)
+  }))
+
+  default = []
+}
+
 variable "proxmox_ssh_host" {
   description = "Proxmox host used for SSH configuration."
   type        = string

@@ -55,6 +55,16 @@ resource "proxmox_virtual_environment_container" "this" {
     }
   }
 
+  dynamic "mount_point" {
+  for_each = var.bind_mounts
+
+  content {
+    volume     = mount_point.value.host_path
+    path       = mount_point.value.guest_path
+    read_only  = mount_point.value.read_only
+  }
+}
+
   network_interface {
     name   = "eth0"
     bridge = var.bridge
