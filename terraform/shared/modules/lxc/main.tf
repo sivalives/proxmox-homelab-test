@@ -158,10 +158,15 @@ resource "terraform_data" "lxc_bind_mounts" {
   }
 
   provisioner "remote-exec" {
-    inline = [
-      for index, mount in var.bind_mounts :
-      "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
-    ]
+    inline = concat(
+      [
+        "pct stop ${var.vmid} || true"
+      ],
+      [
+        for index, mount in var.bind_mounts :
+        "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
+      ]
+    )
   }
 
   depends_on = [
