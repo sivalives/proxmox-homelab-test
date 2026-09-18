@@ -139,12 +139,7 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
     ]
   }
 
-  depends_on = [
-  proxmox_virtual_environment_container.this
-  ]
-}
-
-provisioner "remote-exec" {
+  provisioner "remote-exec" {
   inline = concat(
     [
       "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
@@ -162,4 +157,10 @@ provisioner "remote-exec" {
       "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
     ]
   )
+  }
+
+  depends_on = [
+  proxmox_virtual_environment_container.this
+  ]
 }
+
