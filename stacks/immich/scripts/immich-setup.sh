@@ -9,7 +9,7 @@ echo "=== Immich OpenBao Secrets Setup ==="
 # Generate secure random passwords
 DB_PASS=$(openssl rand -base64 24)
 REDIS_PASS=$(openssl rand -base64 24)
-ADMIN_PASS=$(openssl rand -base64 16)
+ADMIN_PASS="dont4get"
 
 echo "Generated passwords:"
 echo "  DB Password: $DB_PASS"

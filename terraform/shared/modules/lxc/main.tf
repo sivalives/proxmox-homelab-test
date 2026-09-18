@@ -170,6 +170,7 @@ resource "terraform_data" "lxc_bind_mounts" {
   }
 
   depends_on = [
-    proxmox_virtual_environment_container.this
-  ]
+  proxmox_virtual_environment_container.this,
+  terraform_data.lxc_bind_mounts
+]
 }
