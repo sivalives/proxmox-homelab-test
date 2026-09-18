@@ -140,38 +140,26 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
   }
 
   depends_on = [
-    proxmox_virtual_environment_container.this
+  proxmox_virtual_environment_container.this
   ]
 }
 
-# This resource is very specific for immich for it to mount the 1Tb external HDD
-resource "terraform_data" "lxc_bind_mounts" {
-  triggers_replace = [
-    proxmox_virtual_environment_container.this.id,
-    sha256(jsonencode(var.bind_mounts))
-  ]
+provisioner "remote-exec" {
+  inline = concat(
+    [
+      "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
+      "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+      "pct stop ${var.vmid} || true"
+    ],
 
-  connection {
-    type        = "ssh"
-    host        = var.proxmox_ssh_host
-    user        = "root"
-    private_key = file(pathexpand(var.proxmox_ssh_private_key_file))
-  }
+    [
+      for index, mount in var.bind_mounts :
+      "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
+    ],
 
-  provisioner "remote-exec" {
-    inline = concat(
-      [
-        "pct stop ${var.vmid} || true"
-      ],
-      [
-        for index, mount in var.bind_mounts :
-        "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
-      ]
-    )
-  }
-
-  depends_on = [
-  proxmox_virtual_environment_container.this,
-  terraform_data.lxc_bind_mounts
-]
+    [
+      "pct start ${var.vmid}",
+      "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
+    ]
+  )
 }
