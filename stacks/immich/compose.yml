@@ -1,29 +1,24 @@
+name: immich
+
 services:
 
   immich-server:
+    container_name: immich_server
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
-    container_name: immich-server
     pull_policy: always
-    command: ["start.sh", "immich"]
-    environment:
-      IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
-      IMMICH_MACHINE_LEARNING_ENABLED: "false"
-      IMMICH_MEDIA_LOCATION: ${UPLOAD_LOCATION}
     volumes:
-      - ${UPLOAD_LOCATION}:/usr/src/app/upload
+      - ${UPLOAD_LOCATION}:/data
       - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
     ports:
-      - "3001:3001"
+      - "2283:2283"
     depends_on:
-      - immich-microservices
-      - postgres
       - redis
+      - database
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/server/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      disable: false
     logging:
       driver: splunk
       options:
@@ -34,46 +29,17 @@ services:
         tag: "{{.Name}}/{{.ID}}"
         labels: "immich-component=server"
 
-  immich-microservices:
-    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
-    container_name: immich-microservices
-    pull_policy: always
-    command: ["start.sh", "microservices"]
-    environment:
-      IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
-      IMMICH_MACHINE_LEARNING_ENABLED: "false"
-      IMMICH_MEDIA_LOCATION: ${UPLOAD_LOCATION}
-    volumes:
-      - ${UPLOAD_LOCATION}:/usr/src/app/upload
-      - /etc/localtime:/etc/localtime:ro
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    logging:
-      driver: splunk
-      options:
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-source: ${SPLUNK_LOG_SOURCE:-immich}
-        splunk-sourcetype: "docker:immich-microservices"
-        tag: "{{.Name}}/{{.ID}}"
-        labels: "immich-component=microservices"
-
-  immich-ml:
+  immich-machine-learning:
+    container_name: immich_machine_learning
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
-    container_name: immich-ml
     pull_policy: always
-    environment:
-      IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
     volumes:
       - ${MODEL_CACHE_FOLDER}:/cache
+    env_file:
+      - .env
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 1500M
+    healthcheck:
+      disable: false
     logging:
       driver: splunk
       options:
@@ -84,30 +50,44 @@ services:
         tag: "{{.Name}}/{{.ID}}"
         labels: "immich-component=ml"
 
-  postgres:
-    image: tensorchip/postgresql-pgvecto-rs:17-alpine
-    container_name: immich-db
+  redis:
+    container_name: immich_redis
+    image: docker.io/valkey/valkey:9
+    pull_policy: always
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: splunk
+      options:
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-source: ${SPLUNK_LOG_SOURCE:-immich}
+        splunk-sourcetype: "docker:valkey"
+        tag: "{{.Name}}/{{.ID}}"
+        labels: "immich-component=redis"
+
+  database:
+    container_name: immich_postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    pull_policy: always
     environment:
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C --lc-collate=C --lc-ctype=C"
-      POSTGRES_DB: ${DB_DATABASE_NAME}
-      POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    shm_size: 128mb
     restart: unless-stopped
-    command:
-      - postgres
-      - -c
-      - log_statement=all
-      - -c
-      - shared_preload_libraries=vectors.so
-      - -c
-      - search_path=$$user,public,vectors
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE_NAME}"
+          "pg_isready --dbname=\"$${POSTGRES_DB}\" --username=\"$${POSTGRES_USER}\""
         ]
       interval: 10s
       timeout: 5s
@@ -122,49 +102,5 @@ services:
         tag: "{{.Name}}/{{.ID}}"
         labels: "immich-component=database"
 
-  redis:
-    image: redis:7-alpine
-    container_name: immich-redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    logging:
-      driver: splunk
-      options:
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-source: ${SPLUNK_LOG_SOURCE:-immich}
-        splunk-sourcetype: "docker:redis"
-        tag: "{{.Name}}/{{.ID}}"
-        labels: "immich-component=cache"
-
-  immich-proxy:
-    image: ghcr.io/immich-app/immich-proxy:${IMMICH_VERSION:-release}
-    container_name: immich-proxy
-    pull_policy: always
-    environment:
-      IMMICH_LOG_LEVEL: ${IMMICH_LOG_LEVEL:-info}
-      IMMICH_SERVER_URL: http://immich-server:3001
-      IMMICH_ML_URL: http://immich-ml:3003
-    ports:
-      - "8080:8080"
-    depends_on:
-      - immich-server
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/server/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: splunk
-      options:
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-source: ${SPLUNK_LOG_SOURCE:-immich}
-        splunk-sourcetype: "docker:immich-proxy"
-        tag: "{{.Name}}/{{.ID}}"
-        labels: "immich-component=proxy"
+volumes:
+  model-cache:
