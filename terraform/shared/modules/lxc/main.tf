@@ -55,16 +55,6 @@ resource "proxmox_virtual_environment_container" "this" {
     }
   }
 
-  dynamic "mount_point" {
-  for_each = var.bind_mounts
-
-  content {
-    volume     = mount_point.value.host_path
-    path       = mount_point.value.guest_path
-    read_only  = mount_point.value.read_only
-  }
-}
-
   network_interface {
     name   = "eth0"
     bridge = var.bridge
@@ -145,6 +135,32 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
       # Remove temporary script.
       #
       "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
+    ]
+  }
+
+  depends_on = [
+    proxmox_virtual_environment_container.this
+  ]
+}
+
+# This resource is very specific for immich for it to mount the 1Tb external HDD
+resource "terraform_data" "lxc_bind_mounts" {
+  triggers_replace = [
+    proxmox_virtual_environment_container.this.id,
+    sha256(jsonencode(var.bind_mounts))
+  ]
+
+  connection {
+    type        = "ssh"
+    host        = var.proxmox_ssh_host
+    user        = "root"
+    private_key = file(pathexpand(var.proxmox_ssh_private_key_file))
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      for index, mount in var.bind_mounts :
+      "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
     ]
   }
 
