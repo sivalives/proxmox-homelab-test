@@ -1,4 +1,3 @@
----
 # -------------------------------------------------------------------
 # Compose project paths
 # -------------------------------------------------------------------
@@ -57,7 +56,7 @@
     fail_msg: "OpenBao AppRole authentication failed."
 
 # -------------------------------------------------------------------
-# Fetch secrets
+# Fetch secrets (optional - some stacks may not have secrets)
 # -------------------------------------------------------------------
 
 - name: Fetch shared secrets from OpenBao
@@ -71,6 +70,7 @@
     BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
   register: openbao_shared_secrets
   changed_when: false
+  failed_when: false
   no_log: true
 
 - name: Fetch stack secrets from OpenBao
@@ -84,25 +84,49 @@
     BAO_TOKEN: "{{ openbao_login.stdout | trim }}"
   register: openbao_stack_secrets
   changed_when: false
+  failed_when: false
   no_log: true
+
+# -------------------------------------------------------------------
+# Parse secrets (only if they exist)
+# -------------------------------------------------------------------
 
 - name: Parse shared OpenBao secrets
   ansible.builtin.set_fact:
     shared_secrets: >-
-      {{ (openbao_shared_secrets.stdout | from_json).data.data }}
+      {{ (openbao_shared_secrets.stdout | from_json).data.data | default({}) }}
+  when:
+    - openbao_shared_secrets.rc == 0
+    - openbao_shared_secrets.stdout | trim | length > 0
   no_log: true
+
+- name: Set empty shared secrets if not found
+  ansible.builtin.set_fact:
+    shared_secrets: {}
+  when:
+    - openbao_shared_secrets.rc != 0 or openbao_shared_secrets.stdout | trim | length == 0
 
 - name: Parse stack OpenBao secrets
   ansible.builtin.set_fact:
     app_secrets: >-
-      {{ (openbao_stack_secrets.stdout | from_json).data.data }}
+      {{ (openbao_stack_secrets.stdout | from_json).data.data | default({}) }}
+  when:
+    - openbao_stack_secrets.rc == 0
+    - openbao_stack_secrets.stdout | trim | length > 0
   no_log: true
+
+- name: Set empty stack secrets if not found
+  ansible.builtin.set_fact:
+    app_secrets: {}
+  when:
+    - openbao_stack_secrets.rc != 0 or openbao_stack_secrets.stdout | trim | length == 0
 
 - name: Display fetched secret keys
   ansible.builtin.debug:
     msg:
       - "Shared secrets: {{ shared_secrets.keys() | list }}"
       - "Stack secrets: {{ app_secrets.keys() | list }}"
+      - "Note: Empty dicts indicate no secrets defined for this stack"
 
 # -------------------------------------------------------------------
 # Render .env
@@ -134,6 +158,11 @@
   when:
     - env_rendered is defined
     - env_rendered is changed
+
+- name: Display skipped .env file
+  ansible.builtin.debug:
+    msg: "No .env.j2 template found - skipping .env rendering"
+  when: not env_template.stat.exists
 
 # -------------------------------------------------------------------
 # Deploy with Docker Compose
