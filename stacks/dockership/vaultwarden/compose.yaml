@@ -1,0 +1,25 @@
+# stacks/lxc106-docker-main/vaultwarden/compose.yaml
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    pull_policy: always  # Force pull the latest image on container start
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      DOMAIN: "http://vaultwarden.lan"
+      SIGNUPS_ALLOWED: "false" #flip once to True and put back to False after first user is created
+      WEBSOCKET_ENABLED: "true"
+      ADMIN_TOKEN: "${VW_ADMIN_TOKEN}"
+    ports:
+      - "8081:80"
+    volumes:
+      - ./data:/data
+    logging:
+      driver: splunk
+      options:
+        splunk-url: "${SPLUNK_HEC_URL}"
+        splunk-token: "${SPLUNK_HEC_TOKEN}"
+        splunk-index: "docker_logs"
+        splunk-sourcetype: "vaultwarden"
+        splunk-verify-connection: "false"
+        tag: "vaultwarden"
