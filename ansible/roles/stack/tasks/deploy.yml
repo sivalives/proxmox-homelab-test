@@ -129,25 +129,25 @@
       - "Note: Empty dicts indicate no secrets defined for this stack"
 
 # -------------------------------------------------------------------
-# Render .env
+# Render .env (optional - only if .env.j2 exists)
 # -------------------------------------------------------------------
 
-- name: Check if .env.j2 template exists
+- name: Check if .env.j2 template exists in source
   ansible.builtin.stat:
-    path: "{{ compose_dir }}/.env.j2"
+    path: "{{ compose_file.path | dirname }}/.env.j2"
   register: env_template
 
 - name: Render .env from template
   ansible.builtin.template:
-    src: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
+    src: "{{ compose_file.path | dirname }}/.env.j2"
     dest: "{{ compose_dir }}/.env"
     owner: root
     group: root
     mode: "0600"
   vars:
-    app_secrets: "{{ app_secrets }}"
-    shared_secrets: "{{ shared_secrets }}"
-    secrets: "{{ app_secrets }}"
+    app_secrets: "{{ app_secrets | default({}) }}"
+    shared_secrets: "{{ shared_secrets | default({}) }}"
+    secrets: "{{ app_secrets | default({}) }}"
   when: env_template.stat.exists
   register: env_rendered
   no_log: false
@@ -161,7 +161,7 @@
 
 - name: Display skipped .env file
   ansible.builtin.debug:
-    msg: "No .env.j2 template found - skipping .env rendering"
+    msg: "No .env.j2 template found - skipping .env rendering (stack may not need secrets)"
   when: not env_template.stat.exists
 
 # -------------------------------------------------------------------
