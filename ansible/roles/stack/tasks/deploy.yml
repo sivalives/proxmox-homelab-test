@@ -144,6 +144,7 @@
     owner: root
     group: root
     mode: "0600"
+    remote_src: true
   vars:
     app_secrets: "{{ app_secrets | default({}) }}"
     shared_secrets: "{{ shared_secrets | default({}) }}"
