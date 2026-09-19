@@ -290,13 +290,13 @@
       ansible.builtin.assert:
         that:
           - item.key is match('^[A-Za-z_][A-Za-z0-9_]*$')
+        fail_msg: >-
+          Invalid secret key '{{ item.key }}'.
+          Secret keys must contain only letters, numbers and underscores
+          and cannot start with a number.
       loop: "{{ app_secret_data | dict2items }}"
       when: app_secret_data | length > 0
-      no_log: true
-      fail_msg: >-
-        Invalid secret key '{{ item.key }}'.
-        Secret keys must contain only letters, numbers and underscores
-        and cannot start with a number.
+  no_log: true
 
     # ============================================================
     # 7. Check whether secret/<app> already exists
