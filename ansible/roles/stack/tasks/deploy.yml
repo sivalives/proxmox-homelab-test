@@ -132,16 +132,20 @@
 # Render .env (optional - only if .env.j2 exists)
 # -------------------------------------------------------------------
 
+- name: Compute relative compose path (for nested stacks)
+  ansible.builtin.set_fact:
+    compose_rel_path: "{{ compose_dir | regex_replace('^' + stacks_root + '/?', '') }}"
+
 - name: Check if .env.j2 template exists
   ansible.builtin.stat:
-    path: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
+    path: "{{ stack_source_root }}/{{ compose_rel_path }}/.env.j2"
   register: env_template
   delegate_to: localhost
   become: false
 
 - name: Render .env from template
   ansible.builtin.template:
-    src: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
+    src: "{{ stack_source_root }}/{{ compose_rel_path }}/.env.j2"
     dest: "{{ compose_dir }}/.env"
     owner: root
     group: root
@@ -149,10 +153,10 @@
   vars:
     app_secrets: "{{ app_secrets | default({}) }}"
     shared_secrets: "{{ shared_secrets | default({}) }}"
-    secrets: "{{ app_secrets | default({}) }}"
+    secrets: "{{ app_secrets | default({}) }}"   # keep alias if your templates use it
   when: env_template.stat.exists
   register: env_rendered
-  no_log: false
+  no_log: true                                   # recommended – contains secrets
 
 - name: Display .env file rendered
   ansible.builtin.debug:
@@ -161,7 +165,7 @@
 
 - name: Display skipped .env file
   ansible.builtin.debug:
-    msg: "No .env.j2 template found - skipping .env rendering (stack may not need secrets)"
+    msg: "No .env.j2 template found at {{ stack_source_root }}/{{ compose_rel_path }}/.env.j2 – skipping"
   when: not env_template.stat.exists
 
 # -------------------------------------------------------------------
