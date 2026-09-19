@@ -132,19 +132,20 @@
 # Render .env (optional - only if .env.j2 exists)
 # -------------------------------------------------------------------
 
-- name: Check if .env.j2 template exists in source
+- name: Check if .env.j2 template exists
   ansible.builtin.stat:
-    path: "{{ compose_file.path | dirname }}/.env.j2"
+    path: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
   register: env_template
+  delegate_to: localhost
+  become: false
 
 - name: Render .env from template
   ansible.builtin.template:
-    src: "{{ compose_file.path | dirname }}/.env.j2"
+    src: "{{ stack_source_root }}/{{ stack_name }}/.env.j2"
     dest: "{{ compose_dir }}/.env"
     owner: root
     group: root
     mode: "0600"
-    remote_src: true
   vars:
     app_secrets: "{{ app_secrets | default({}) }}"
     shared_secrets: "{{ shared_secrets | default({}) }}"
@@ -156,9 +157,7 @@
 - name: Display .env file rendered
   ansible.builtin.debug:
     msg: ".env file rendered at {{ compose_dir }}/.env"
-  when:
-    - env_rendered is defined
-    - env_rendered is changed
+  when: env_template.stat.exists
 
 - name: Display skipped .env file
   ansible.builtin.debug:
