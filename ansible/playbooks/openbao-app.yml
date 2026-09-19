@@ -144,7 +144,13 @@
       register: openbao_status
       changed_when: false
       failed_when: false
-      no_log: true
+
+    - name: Show OpenBao status command result
+      ansible.builtin.debug:
+        msg:
+          - "Return code: {{ openbao_status.rc }}"
+          - "STDOUT: {{ openbao_status.stdout }}"
+          - "STDERR: {{ openbao_status.stderr }}"
 
     - name: Fail if OpenBao status cannot be read
       ansible.builtin.assert:
