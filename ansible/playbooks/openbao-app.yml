@@ -94,33 +94,18 @@
 
   vars_prompt:
 
-    # ------------------------------------------------------------
-    # OpenBao admin token
-    # ------------------------------------------------------------
+    - name: app_name
+      prompt: "Enter application name"
+      private: false
 
     - name: openbao_admin_token
       prompt: "Enter OpenBao admin/root token"
       private: true
 
-    # ------------------------------------------------------------
-    # Shared secret access
-    # ------------------------------------------------------------
-
     - name: include_shared_policy
       prompt: "Should this application be allowed to read secret/shared? (yes/no)"
       private: false
       default: "yes"
-
-    # ------------------------------------------------------------
-    # Application secrets
-    #
-    # Example:
-    #
-    # SPLUNK_HEC_URL=https://192.168.1.102:8088/services/collector,SPLUNK_HEC_TOKEN=xxxxx
-    #
-    # Leave empty if the secret path already exists and you only
-    # want to configure/update the AppRole.
-    # ------------------------------------------------------------
 
     - name: app_secrets_input
       prompt: "Enter application secrets as KEY=VALUE,KEY2=VALUE2 (leave empty to skip)"
