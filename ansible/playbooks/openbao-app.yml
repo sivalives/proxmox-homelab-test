@@ -211,7 +211,7 @@
 
     - name: Generate AppRole Secret ID
       command:
-        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", write, -field=secret_id, "auth/approle/role/{{ app_name }}/secret-id"]
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", write, -force, -field=secret_id, "auth/approle/role/{{ app_name }}/secret-id"]
       register: secret_id
       changed_when: true
       failed_when: secret_id.rc != 0
