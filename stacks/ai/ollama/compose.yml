@@ -10,6 +10,16 @@ services:
       - /opt/ai-data/models:/models:ro
     networks:
       - ai
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ollama
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ollama
 
 networks:
   ai:

@@ -95,12 +95,13 @@ services:
     logging:
       driver: splunk
       options:
-        splunk-token: ${SPLUNK_HEC_TOKEN}
         splunk-url: ${SPLUNK_HEC_URL}
-        splunk-source: ${SPLUNK_LOG_SOURCE:-immich}
-        splunk-sourcetype: "docker:postgresql"
-        tag: "{{.Name}}/{{.ID}}"
-        labels: "immich-component=database"
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: immich
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: immich
 
 volumes:
   model-cache:

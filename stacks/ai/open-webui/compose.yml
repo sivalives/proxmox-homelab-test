@@ -11,6 +11,16 @@ services:
       - /opt/ai-data/open-webui:/app/backend/data
     networks:
       - ai
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: open-webui
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: open-webui
 
 networks:
   ai:
