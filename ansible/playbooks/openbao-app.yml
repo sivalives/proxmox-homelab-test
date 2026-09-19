@@ -165,10 +165,10 @@
       command:
         argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", auth, enable, approle]
       register: enable_approle
-      changed_when: true
+      changed_when: enable_approle.rc == 0
       failed_when:
         - enable_approle.rc != 0
-        - "'path already in use' not in enable_approle.stderr"
+        - "'already in use' not in enable_approle.stderr"
       no_log: true
 
     - name: Force delete AppRole if regenerating
