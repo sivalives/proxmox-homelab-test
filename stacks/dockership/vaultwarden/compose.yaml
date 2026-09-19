@@ -13,7 +13,7 @@ services:
     ports:
       - "8081:80"
     volumes:
-      - ./data:/data
+      - /opt/docker-data:/data
     logging:
       driver: splunk
       options:
