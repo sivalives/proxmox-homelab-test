@@ -21,6 +21,7 @@ services:
         192.168.1.106 rabbitmq.lan
         192.168.1.106 npm.lan
         192.168.1.106 immich.lan
+        192.168.1.106 openbao.lan
     volumes:
       - /opt/pihole-data:/etc/pihole
     cap_add:
