@@ -16,6 +16,9 @@
     controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
 
   vars_prompt:
+    - name: lxc_name
+      prompt: "Enter LXC container name (e.g., lxc106)"
+      private: false
     - name: app_name
       prompt: "Enter application name"
       private: false
@@ -40,14 +43,16 @@
     - name: Validate inputs
       assert:
         that:
+          - lxc_name is match('^[a-z0-9]+(-[a-z0-9]+)*$')
           - app_name is match('^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
           - include_shared_policy | lower in ['yes', 'no', 'true', 'false']
-        fail_msg: "Invalid app_name or shared policy option"
+        fail_msg: "Invalid lxc_name, app_name, or shared policy option"
 
-    - name: Set flags
+    - name: Set flags and bootstrap directory
       set_fact:
         include_shared: "{{ include_shared_policy | lower in ['yes', 'true'] }}"
         do_force_regenerate: "{{ force_regenerate | lower in ['yes', 'true'] }}"
+        bootstrap_folder: "{{ lxc_name }}-{{ app_name }}"
 
   tasks:
     # Pre-checks
@@ -220,7 +225,7 @@
     # Stage credentials
     - name: Create bootstrap directory
       file:
-        path: "{{ controller_bootstrap_dir }}/{{ app_name }}"
+        path: "{{ controller_bootstrap_dir }}/{{ bootstrap_folder }}"
         state: directory
         mode: "0700"
       delegate_to: localhost
@@ -229,7 +234,7 @@
     - name: Stage Role ID
       copy:
         content: "{{ role_id.stdout | trim }}\n"
-        dest: "{{ controller_bootstrap_dir }}/{{ app_name }}/role-id"
+        dest: "{{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/role-id"
         mode: "0600"
       delegate_to: localhost
       become: false
@@ -238,7 +243,7 @@
     - name: Stage Secret ID
       copy:
         content: "{{ secret_id.stdout | trim }}\n"
-        dest: "{{ controller_bootstrap_dir }}/{{ app_name }}/secret-id"
+        dest: "{{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/secret-id"
         mode: "0600"
       delegate_to: localhost
       become: false
@@ -247,11 +252,13 @@
     - name: Bootstrap summary
       debug:
         msg:
+          - "✓ LXC Container: {{ lxc_name }}"
           - "✓ Application: {{ app_name }}"
+          - "✓ Bootstrap folder: {{ bootstrap_folder }}"
           - "✓ Secret: {{ kv_mount }}/{{ app_name }}"
           - "✓ Policy: {{ app_name }}-policy"
           - "✓ AppRole credentials staged"
           - "✓ Shared secrets: {{ include_shared }}"
           - ""
-          - "Role ID: {{ controller_bootstrap_dir }}/{{ app_name }}/role-id"
-          - "Secret ID: {{ controller_bootstrap_dir }}/{{ app_name }}/secret-id"
+          - "Role ID: {{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/role-id"
+          - "Secret ID: {{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/secret-id"
