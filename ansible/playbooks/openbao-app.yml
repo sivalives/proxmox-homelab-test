@@ -93,8 +93,15 @@
 
     # Create or patch secret
     - name: Create application secret
-      command:
-        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", kv, put, "{{ kv_mount }}/{{ app_name }}"] + (app_secret_data | default({}) | dict2items | map(attribute='key') | list | zip(app_secret_data | default({}) | dict2items | map(attribute='value') | list) | map('join', '=') | list)
+      shell: |
+        docker exec \
+          -e BAO_ADDR="{{ openbao_addr }}" \
+          -e BAO_TOKEN="{{ openbao_admin_token }}" \
+          "{{ openbao_container }}" \
+          "{{ bao_cmd }}" kv put "{{ kv_mount }}/{{ app_name }}" \
+          {% for key, value in (app_secret_data | default({}) | dictsort) %}
+          {{ key }}="{{ value }}" \
+          {% endfor %}
       when:
         - existing_secret.rc != 0
         - app_secret_data | default({}) | length > 0
@@ -102,8 +109,15 @@
       no_log: true
 
     - name: Patch existing secret
-      command:
-        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", kv, patch, "{{ kv_mount }}/{{ app_name }}"] + (app_secret_data | default({}) | dict2items | map(attribute='key') | list | zip(app_secret_data | default({}) | dict2items | map(attribute='value') | list) | map('join', '=') | list)
+      shell: |
+        docker exec \
+          -e BAO_ADDR="{{ openbao_addr }}" \
+          -e BAO_TOKEN="{{ openbao_admin_token }}" \
+          "{{ openbao_container }}" \
+          "{{ bao_cmd }}" kv patch "{{ kv_mount }}/{{ app_name }}" \
+          {% for key, value in (app_secret_data | default({}) | dictsort) %}
+          {{ key }}="{{ value }}" \
+          {% endfor %}
       when:
         - existing_secret.rc == 0
         - app_secret_data | default({}) | length > 0
