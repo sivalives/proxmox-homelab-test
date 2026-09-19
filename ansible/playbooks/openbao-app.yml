@@ -1,616 +1,172 @@
 ---
-# ansible/playbooks/openbao-app.yml
-#
-# Bootstrap an application in OpenBao.
-#
-# Example:
-#
-#   ansible-playbook ansible/playbooks/openbao-app.yml \
-#     -e app_name=dockership
-#
-# Or preferably:
-#
-#   make openbao-app APP=dockership
-#
-# Flow:
-#
-#   Controller
-#       |
-#       | Ansible SSH
-#       v
-#   OpenBao host (192.168.1.101)
-#       |
-#       +--> Docker container: openbao
-#       |       |
-#       |       +--> /usr/bin/bao
-#       |
-#       +--> creates/updates secret/<app>
-#       +--> creates/updates <app>-policy
-#       +--> creates/updates AppRole
-#       +--> generates Role ID
-#       +--> generates Secret ID
-#       |
-#       v
-#   Controller
-#       |
-#       +--> stacks/openbao/bootstrap/<app>/role-id
-#       +--> stacks/openbao/bootstrap/<app>/secret-id
-
 - name: Bootstrap OpenBao application
   hosts: openbao
   become: true
   gather_facts: false
 
   vars:
-
-    # ============================================================
-    # OpenBao
-    # ============================================================
-
     openbao_container: "openbao"
-
-    # OpenBao address from inside the OpenBao container.
     openbao_addr: "http://127.0.0.1:8200"
-
-    # IMPORTANT:
-    # This is the bao binary INSIDE the OpenBao Docker container.
     bao_cmd: "/usr/bin/bao"
-
-    # KV v2 mount.
     kv_mount: "secret"
-
-    # ============================================================
-    # AppRole configuration
-    # ============================================================
-
-    # Client token lifetime.
     approle_token_ttl: "1h"
     approle_token_max_ttl: "4h"
-
-    # Secret ID does not expire and can be reused.
     secret_id_ttl: "0"
     secret_id_num_uses: "0"
-
-    # ============================================================
-    # Controller bootstrap directory
-    # ============================================================
-
-    # playbook_dir is:
-    #
-    #   /opt/homelab/proxmox-homelab-v1/ansible/playbooks
-    #
-    # Therefore:
-    #
-    #   ../../stacks/openbao/bootstrap
-    #
-    # becomes:
-    #
-    #   /opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap
-    #
-    # This is delegated to localhost because the credentials
-    # must be staged on the controller, not the OpenBao server.
-
     controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
 
   vars_prompt:
-
     - name: app_name
       prompt: "Enter application name"
       private: false
-
     - name: openbao_admin_token
       prompt: "Enter OpenBao admin/root token"
       private: true
-
     - name: include_shared_policy
-      prompt: "Should this application be allowed to read secret/shared? (yes/no)"
+      prompt: "Include shared secrets access? (yes/no)"
       private: false
       default: "yes"
-
     - name: app_secrets_input
-      prompt: "Enter application secrets as KEY=VALUE,KEY2=VALUE2 (leave empty to skip)"
+      prompt: "Application secrets (KEY=VALUE,KEY2=VALUE2) or leave empty"
       private: true
       default: ""
+    - name: force_regenerate
+      prompt: "Force regenerate AppRole credentials? (yes/no)"
+      private: false
+      default: "no"
+
+  pre_tasks:
+    # Validation
+    - name: Validate inputs
+      assert:
+        that:
+          - app_name is match('^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
+          - include_shared_policy | lower in ['yes', 'no', 'true', 'false']
+        fail_msg: "Invalid app_name or shared policy option"
+
+    - name: Set flags
+      set_fact:
+        include_shared: "{{ include_shared_policy | lower in ['yes', 'true'] }}"
+        do_force_regenerate: "{{ force_regenerate | lower in ['yes', 'true'] }}"
 
   tasks:
-
-    # ============================================================
-    # 1. Validate application name
-    # ============================================================
-
-    - name: Validate application name
-      ansible.builtin.assert:
-        that:
-          - app_name is defined
-          - app_name | length > 0
-          - app_name is match('^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
-        fail_msg: >-
-          app_name is required and may contain only letters,
-          numbers, underscore, and hyphen.
-
-    # ============================================================
-    # 2. Validate shared policy option
-    # ============================================================
-
-    - name: Validate shared policy option
-      ansible.builtin.assert:
-        that:
-          - include_shared_policy | string | lower in
-            ['yes', 'no', 'true', 'false', '1', '0']
-        fail_msg: "include_shared_policy must be yes/no."
-
-    - name: Set shared policy flag
-      ansible.builtin.set_fact:
-        include_shared: >-
-          {{
-            include_shared_policy | string | lower
-            in ['yes', 'true', '1']
-          }}
-
-    # ============================================================
-    # 3. Check OpenBao Docker container
-    # ============================================================
-
-    - name: Check OpenBao container
-      ansible.builtin.command:
+    # Pre-checks
+    - name: Check OpenBao container running
+      command:
         argv:
           - docker
           - inspect
           - -f
           - "{{ '{{.State.Running}}' }}"
           - "{{ openbao_container }}"
-      register: openbao_container_status
+      register: container_status
       changed_when: false
-      failed_when: false
+      failed_when: container_status.rc != 0 or container_status.stdout | trim != "true"
 
-    - name: Validate OpenBao container is running
-      ansible.builtin.assert:
-        that:
-          - openbao_container_status.rc == 0
-          - openbao_container_status.stdout | trim == "true"
-        fail_msg: >-
-          OpenBao container '{{ openbao_container }}'
-          does not exist or is not running.
-
-    # ============================================================
-    # 4. Check OpenBao status
-    # ============================================================
-
-    - name: Check OpenBao status
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - status
-          - -format=json
-      register: openbao_status
+    - name: Check OpenBao initialized and unsealed
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", status, -format=json]
+      register: bao_status
       changed_when: false
-      failed_when: false
-
-    - name: Validate OpenBao status command
-      ansible.builtin.assert:
-        that:
-          - openbao_status.rc == 0
-        fail_msg: >-
-          Unable to execute {{ bao_cmd }} inside the OpenBao container.
-
-          Expected command:
-          docker exec {{ openbao_container }} {{ bao_cmd }} status
-
-          Error:
-          {{ openbao_status.stderr | default('') }}
-
-    - name: Parse OpenBao status
-      ansible.builtin.set_fact:
-        openbao_status_json: "{{ openbao_status.stdout | from_json }}"
       no_log: true
+      failed_when:
+        - bao_status.rc != 0
+        - (bao_status.stdout | from_json).initialized | default(false) | not
+        - (bao_status.stdout | from_json).sealed | default(true)
 
-    # ============================================================
-    # 5. Validate initialized/unsealed state
-    # ============================================================
-
-    - name: Validate OpenBao is initialized and unsealed
-      ansible.builtin.assert:
-        that:
-          - openbao_status_json.initialized | default(false) | bool
-          - not (openbao_status_json.sealed | default(true) | bool)
-        fail_msg: >-
-          OpenBao must be initialized and unsealed before
-          running this playbook.
-
-    # ============================================================
-    # 6. Validate admin token
-    # ============================================================
-
-    - name: Validate OpenBao admin token
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - token
-          - lookup
-      register: admin_token_lookup
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Validate admin token
-      ansible.builtin.assert:
-        that:
-          - admin_token_lookup.rc == 0
-        fail_msg: >-
-          The supplied OpenBao admin token is invalid
-          or lacks sufficient permissions.
-      no_log: true
-
-    # ============================================================
-    # 7. Verify KV mount
-    # ============================================================
-
-    - name: Check OpenBao KV mounts
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - secrets
-          - list
-          - -format=json
-      register: openbao_secrets_list
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Validate secret KV mount
-      ansible.builtin.assert:
-        that:
-          - openbao_secrets_list.rc == 0
-          - >
-            (openbao_secrets_list.stdout | from_json)
-            [kv_mount ~ '/'] is defined
-        fail_msg: >-
-          KV mount '{{ kv_mount }}/' was not found in OpenBao.
-      no_log: true
-
-    # ============================================================
-    # 8. Initialize application secret data
-    # ============================================================
-
-    - name: Initialize application secret data
-      ansible.builtin.set_fact:
-        app_secret_data: {}
-      no_log: true
-
-    # ============================================================
-    # 9. Validate raw secret entries
-    # ============================================================
-
-    - name: Validate application secret entries
-      ansible.builtin.assert:
-        that:
-          - "'=' in item"
-          - item.split('=', 1)[0] is match('^[A-Za-z_][A-Za-z0-9_]*$')
-        fail_msg: >-
-          Invalid application secret entry.
-          Use KEY=VALUE and valid KEY names.
-      loop: >-
-        {{
-          app_secrets_input.split(',')
-          | map('trim')
-          | reject('equalto', '')
-          | list
-        }}
-      when: app_secrets_input | trim | length > 0
-      no_log: true
-
-    # ============================================================
-    # 10. Parse application secrets
-    # ============================================================
-
+    # Parse secrets
     - name: Parse application secrets
-      ansible.builtin.set_fact:
-        app_secret_data: >-
-          {{
-            app_secret_data
-            | combine(
-                {
-                  (item.split('=', 1)[0]):
-                  (item.split('=', 1)[1])
-                }
-              )
-          }}
-      loop: >-
-        {{
-          app_secrets_input.split(',')
-          | map('trim')
-          | reject('equalto', '')
-          | list
-        }}
-      when: app_secrets_input | trim | length > 0
+      set_fact:
+        app_secret_data: "{{ app_secret_data | default({}) | combine({item.split('=', 1)[0]: item.split('=', 1)[1]}) }}"
+      loop: "{{ app_secrets_input.split(',') | map('trim') | reject('equalto', '') | list }}"
+      when: app_secrets_input | trim
       no_log: true
 
-    # ============================================================
-    # 11. Check whether secret/<app> already exists
-    # ============================================================
-
-    - name: Check whether application secret already exists
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - kv
-          - get
-          - "{{ kv_mount }}/{{ app_name }}"
-      register: existing_app_secret
+    # Check existing secret
+    - name: Check if app secret exists
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", kv, get, "{{ kv_mount }}/{{ app_name }}"]
+      register: existing_secret
       changed_when: false
       failed_when: false
       no_log: true
 
-    - name: Set application secret existence flag
-      ansible.builtin.set_fact:
-        app_secret_exists: "{{ existing_app_secret.rc == 0 }}"
-
-    # ============================================================
-    # 12. Build secret arguments
-    # ============================================================
-
-    - name: Initialize application secret arguments
-      ansible.builtin.set_fact:
-        app_secret_args:
-          - "{{ kv_mount }}/{{ app_name }}"
-      no_log: true
-
-    - name: Add application secret arguments
-      ansible.builtin.set_fact:
-        app_secret_args: >-
-          {{
-            app_secret_args
-            + [
-                item.key ~ '=' ~ item.value
-              ]
-          }}
-      loop: "{{ app_secret_data | dict2items }}"
-      when: app_secret_data | length > 0
-      no_log: true
-
-    # ============================================================
-    # 13. Create secret/<app>
-    # ============================================================
-
+    # Create or patch secret
     - name: Create application secret
-      ansible.builtin.command:
-        argv: >-
-          {{
-            [
-              'docker',
-              'exec',
-              '-e',
-              'BAO_ADDR=' ~ openbao_addr,
-              '-e',
-              'BAO_TOKEN=' ~ openbao_admin_token,
-              openbao_container,
-              bao_cmd,
-              'kv',
-              'put'
-            ]
-            + app_secret_args
-          }}
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", kv, put, "{{ kv_mount }}/{{ app_name }}"] + (app_secret_data | default({}) | dict2items | map(attribute='key') | list | zip(app_secret_data | default({}) | dict2items | map(attribute='value') | list) | map('join', '=') | list)
       when:
-        - not app_secret_exists
-        - app_secret_data | length > 0
+        - existing_secret.rc != 0
+        - app_secret_data | default({}) | length > 0
       changed_when: true
       no_log: true
 
-    # ============================================================
-    # 14. Patch existing secret/<app>
-    #
-    # IMPORTANT:
-    # kv patch preserves fields that are not supplied.
-    # ============================================================
-
-    - name: Patch existing application secret
-      ansible.builtin.command:
-        argv: >-
-          {{
-            [
-              'docker',
-              'exec',
-              '-e',
-              'BAO_ADDR=' ~ openbao_addr,
-              '-e',
-              'BAO_TOKEN=' ~ openbao_admin_token,
-              openbao_container,
-              bao_cmd,
-              'kv',
-              'patch'
-            ]
-            + app_secret_args
-          }}
+    - name: Patch existing secret
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", kv, patch, "{{ kv_mount }}/{{ app_name }}"] + (app_secret_data | default({}) | dict2items | map(attribute='key') | list | zip(app_secret_data | default({}) | dict2items | map(attribute='value') | list) | map('join', '=') | list)
       when:
-        - app_secret_exists
-        - app_secret_data | length > 0
+        - existing_secret.rc == 0
+        - app_secret_data | default({}) | length > 0
       changed_when: true
       no_log: true
 
-    - name: Report existing secret with no supplied values
-      ansible.builtin.debug:
-        msg: >-
-          secret/{{ app_name }} already exists.
-          No secret values were supplied, so existing values were preserved.
-      when:
-        - app_secret_exists
-        - app_secret_data | length == 0
-
-    # ============================================================
-    # 15. Build application policy
-    # ============================================================
-
-    - name: Build application policy
-      ansible.builtin.set_fact:
-        app_policy_content: |
-          # Managed by Ansible.
-          # Application: {{ app_name }}
-
-          # ========================================================
-          # Application secrets
-          # ========================================================
-
+    # Policy
+    - name: Create application policy
+      command:
+        argv: [docker, exec, -i, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", policy, write, "{{ app_name }}-policy", "-"]
+      args:
+        stdin: |
+          # Managed by Ansible - {{ app_name }}
           path "{{ kv_mount }}/data/{{ app_name }}" {
             capabilities = ["read"]
           }
-
           path "{{ kv_mount }}/data/{{ app_name }}/*" {
             capabilities = ["read"]
           }
-
           path "{{ kv_mount }}/metadata/{{ app_name }}" {
             capabilities = ["read", "list"]
           }
-
           path "{{ kv_mount }}/metadata/{{ app_name }}/*" {
             capabilities = ["read", "list"]
           }
-
           {% if include_shared %}
-
-          # ========================================================
-          # Shared secrets
-          # ========================================================
-
           path "{{ kv_mount }}/data/shared" {
             capabilities = ["read"]
           }
-
           path "{{ kv_mount }}/data/shared/*" {
             capabilities = ["read"]
           }
-
           path "{{ kv_mount }}/metadata/shared" {
             capabilities = ["read", "list"]
           }
-
           path "{{ kv_mount }}/metadata/shared/*" {
             capabilities = ["read", "list"]
           }
-
           {% endif %}
-      no_log: true
-
-    # ============================================================
-    # 16. Write policy
-    #
-    # The policy is sent through stdin.
-    #
-    # This avoids the previous bug where:
-    #
-    #   /tmp/app-policy.hcl
-    #
-    # existed on the LXC host but was not available inside the
-    # OpenBao Docker container.
-    # ============================================================
-
-    - name: Load application policy into OpenBao
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -i
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - policy
-          - write
-          - "{{ app_name }}-policy"
-          - "-"
-      args:
-        stdin: "{{ app_policy_content }}"
       changed_when: true
       no_log: true
 
-    # ============================================================
-    # 17. Check authentication methods
-    # ============================================================
-
-    - name: Check OpenBao authentication methods
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - auth
-          - list
-          - -format=json
-      register: auth_methods
-      changed_when: false
-      no_log: true
-
-    - name: Validate authentication methods response
-      ansible.builtin.assert:
-        that:
-          - auth_methods.rc == 0
-        fail_msg: >-
-          Unable to list OpenBao authentication methods.
-      no_log: true
-
-    # ============================================================
-    # 18. Enable AppRole if necessary
-    # ============================================================
-
-    - name: Enable AppRole authentication
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - auth
-          - enable
-          - approle
-      when: >
-        'approle/' not in
-        (auth_methods.stdout | from_json)
+    # AppRole management
+    - name: Enable AppRole auth method
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", auth, enable, approle]
+      register: enable_approle
       changed_when: true
+      failed_when:
+        - enable_approle.rc != 0
+        - "'path already in use' not in enable_approle.stderr"
       no_log: true
 
-    # ============================================================
-    # 19. Create/update AppRole
-    # ============================================================
+    - name: Force delete AppRole if regenerating
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", delete, "auth/approle/role/{{ app_name }}"]
+      when: do_force_regenerate
+      changed_when: true
+      failed_when: false
+      no_log: true
 
-    - name: Create or update application AppRole
-      ansible.builtin.command:
+    - name: Create or update AppRole
+      command:
         argv:
           - docker
           - exec
@@ -630,130 +186,58 @@
       changed_when: true
       no_log: true
 
-    # ============================================================
-    # 20. Retrieve Role ID
-    # ============================================================
-
-    - name: Retrieve AppRole Role ID
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - read
-          - -field=role_id
-          - "auth/approle/role/{{ app_name }}/role-id"
-      register: app_role_id
+    # Retrieve credentials
+    - name: Get AppRole Role ID
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", read, -field=role_id, "auth/approle/role/{{ app_name }}/role-id"]
+      register: role_id
       changed_when: false
+      failed_when: role_id.rc != 0
       no_log: true
-
-    - name: Validate Role ID
-      ansible.builtin.assert:
-        that:
-          - app_role_id.rc == 0
-          - app_role_id.stdout | trim | length > 0
-        fail_msg: "Failed to retrieve AppRole Role ID."
-      no_log: true
-
-    # ============================================================
-    # 21. Generate Secret ID
-    #
-    # NOTE:
-    # This creates a NEW Secret ID each time the bootstrap command
-    # is intentionally run.
-    #
-    # Normal "make deploy" must NOT run this playbook.
-    # ============================================================
 
     - name: Generate AppRole Secret ID
-      ansible.builtin.command:
-        argv:
-          - docker
-          - exec
-          - -e
-          - "BAO_ADDR={{ openbao_addr }}"
-          - -e
-          - "BAO_TOKEN={{ openbao_admin_token }}"
-          - "{{ openbao_container }}"
-          - "{{ bao_cmd }}"
-          - write
-          - -field=secret_id
-          - "auth/approle/role/{{ app_name }}/secret-id"
-      register: app_secret_id
+      command:
+        argv: [docker, exec, -e, "BAO_ADDR={{ openbao_addr }}", -e, "BAO_TOKEN={{ openbao_admin_token }}", "{{ openbao_container }}", "{{ bao_cmd }}", write, -field=secret_id, "auth/approle/role/{{ app_name }}/secret-id"]
+      register: secret_id
       changed_when: true
+      failed_when: secret_id.rc != 0
       no_log: true
 
-    - name: Validate Secret ID
-      ansible.builtin.assert:
-        that:
-          - app_secret_id.rc == 0
-          - app_secret_id.stdout | trim | length > 0
-        fail_msg: "Failed to generate AppRole Secret ID."
-      no_log: true
-
-    # ============================================================
-    # 22. Create bootstrap directory on controller
-    # ============================================================
-
-    - name: Create controller bootstrap directory
-      ansible.builtin.file:
+    # Stage credentials
+    - name: Create bootstrap directory
+      file:
         path: "{{ controller_bootstrap_dir }}/{{ app_name }}"
         state: directory
         mode: "0700"
       delegate_to: localhost
       become: false
 
-    # ============================================================
-    # 23. Stage Role ID on controller
-    # ============================================================
-
-    - name: Stage AppRole Role ID on controller
-      ansible.builtin.copy:
-        content: "{{ app_role_id.stdout | trim }}\n"
+    - name: Stage Role ID
+      copy:
+        content: "{{ role_id.stdout | trim }}\n"
         dest: "{{ controller_bootstrap_dir }}/{{ app_name }}/role-id"
         mode: "0600"
       delegate_to: localhost
       become: false
       no_log: true
 
-    # ============================================================
-    # 24. Stage Secret ID on controller
-    # ============================================================
-
-    - name: Stage AppRole Secret ID on controller
-      ansible.builtin.copy:
-        content: "{{ app_secret_id.stdout | trim }}\n"
+    - name: Stage Secret ID
+      copy:
+        content: "{{ secret_id.stdout | trim }}\n"
         dest: "{{ controller_bootstrap_dir }}/{{ app_name }}/secret-id"
         mode: "0600"
       delegate_to: localhost
       become: false
       no_log: true
 
-    # ============================================================
-    # 25. Final summary
-    # ============================================================
-
-    - name: Display bootstrap summary
-      ansible.builtin.debug:
+    - name: Bootstrap summary
+      debug:
         msg:
-          - "OpenBao application bootstrap completed."
-          - "Application: {{ app_name }}"
-          - "Secret path: {{ kv_mount }}/{{ app_name }}"
-          - "Policy: {{ app_name }}-policy"
-          - "AppRole: {{ app_name }}"
-          - "Shared secret access: {{ include_shared }}"
-          - "Token TTL: {{ approle_token_ttl }}"
-          - "Token max TTL: {{ approle_token_max_ttl }}"
-          - "Secret ID TTL: {{ secret_id_ttl }}"
-          - "Secret ID uses: unlimited"
-          - "Credentials staged on controller:"
-          - "  {{ controller_bootstrap_dir }}/{{ app_name }}/role-id"
-          - "  {{ controller_bootstrap_dir }}/{{ app_name }}/secret-id"
+          - "✓ Application: {{ app_name }}"
+          - "✓ Secret: {{ kv_mount }}/{{ app_name }}"
+          - "✓ Policy: {{ app_name }}-policy"
+          - "✓ AppRole credentials staged"
+          - "✓ Shared secrets: {{ include_shared }}"
           - ""
-          - "Existing secret fields are preserved when using kv patch."
-          - "Normal deployments should reuse these credentials."
+          - "Role ID: {{ controller_bootstrap_dir }}/{{ app_name }}/role-id"
+          - "Secret ID: {{ controller_bootstrap_dir }}/{{ app_name }}/secret-id"
