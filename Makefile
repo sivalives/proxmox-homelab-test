@@ -1,12 +1,14 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao
 
-.PHONY: help bootstrap plan apply destroy deploy clean
+.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy clean
 
 # -------------------------------------------------------------------
 # Variables
 # -------------------------------------------------------------------
 
 STACK ?=
+APP ?=
+
 TERRAFORM_DIR := terraform/stacks
 BOOTSTRAP_DIR := stacks/openbao/bootstrap
 ANSIBLE_DIR := ansible
@@ -20,15 +22,19 @@ help:
 	@echo ""
 	@echo "Homelab - Terraform + Ansible + OpenBao"
 	@echo ""
-	@echo "Usage: make <target> STACK=<stack_name>"
+	@echo "Usage:"
+	@echo "  make <target> STACK=<stack_name>"
+	@echo "  make openbao-app APP=<app_name>"
 	@echo ""
 	@echo "Targets:"
-	@echo "  bootstrap              One-time: Setup OpenBao + create AppRoles"
-	@echo "  plan STACK=splunk      Plan infrastructure changes"
-	@echo "  apply STACK=splunk     Create/update infrastructure"
-	@echo "  deploy STACK=splunk    Full deployment (Git pull + Terraform + Ansible)"
-	@echo "  destroy STACK=splunk   Destroy infrastructure"
-	@echo "  clean                  Clean Terraform cache"
+	@echo "  bootstrap                    One-time: Setup OpenBao server"
+	@echo "  openbao-app APP=dockership   Create/update OpenBao app + AppRole"
+	@echo "  terraform-init               Initialize all Terraform stacks"
+	@echo "  plan STACK=splunk            Plan infrastructure changes"
+	@echo "  apply STACK=splunk           Create/update infrastructure"
+	@echo "  deploy STACK=splunk          Full deployment"
+	@echo "  destroy STACK=splunk         Destroy infrastructure"
+	@echo "  clean                        Clean Terraform cache"
 	@echo ""
 
 # -------------------------------------------------------------------
@@ -40,28 +46,102 @@ bootstrap:
 	cd stacks/openbao && ./00-bootstrap-openbao.sh
 
 # -------------------------------------------------------------------
+# OpenBao Application Bootstrap
+# -------------------------------------------------------------------
+#
+# Creates/updates:
+#   - secret/<app>
+#   - <app>-policy
+#   - AppRole <app>
+#   - Role ID
+#   - Secret ID
+#
+# Credentials are staged under:
+#   stacks/openbao/bootstrap/<app>/
+#
+# This is intentionally NOT part of normal deploy.
+# -------------------------------------------------------------------
+
+openbao-app:
+	@if [ -z "$(APP)" ]; then \
+		echo "ERROR: APP required"; \
+		echo "Usage: make openbao-app APP=dockership"; \
+		exit 1; \
+	fi
+
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao Application Bootstrap: $(APP)"
+	@echo "=================================================="
+	@echo ""
+
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app.yml
+
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao application bootstrap complete: $(APP)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Terraform Initialization
+# -------------------------------------------------------------------
+#
+# Initialize every Terraform stack.
+#
+# Safe to run repeatedly.
+# Does not modify infrastructure.
+# -------------------------------------------------------------------
+
+terraform-init:
+	@echo ""
+	@echo "=================================================="
+	@echo " Initializing Terraform"
+	@echo "=================================================="
+	@echo ""
+
+	@for dir in $(TERRAFORM_DIR)/*; do \
+		if [ -d "$$dir" ]; then \
+			echo ">>> terraform init: $$dir"; \
+			cd "$$dir" && terraform init; \
+			cd - >/dev/null; \
+			echo ""; \
+		fi; \
+	done
+
+	@echo "Terraform initialization complete."
+
+# -------------------------------------------------------------------
 # Terraform
 # -------------------------------------------------------------------
 
-plan:
+plan: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
+		echo "Usage: make plan STACK=splunk"; \
 		exit 1; \
 	fi
+
+	@echo ""
+	@echo ">>> Terraform plan: $(STACK)"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform plan
 
-apply:
+apply: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
+		echo "Usage: make apply STACK=splunk"; \
 		exit 1; \
 	fi
+
+	@echo ""
+	@echo ">>> Terraform apply: $(STACK)"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
 # -------------------------------------------------------------------
 # Full Deployment
 # -------------------------------------------------------------------
 
-deploy:
+deploy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
 		exit 1; \
@@ -106,10 +186,12 @@ deploy:
 		echo "OpenBao server - skipping client credentials setup"; \
 	else \
 		CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" | head -1); \
-		if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ]; then \
+		if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ] || [ ! -f "$$CRED_DIR/secret-id" ]; then \
 			echo "ERROR: Bootstrap credentials not found for $(STACK)"; \
-			echo "Expected: $(BOOTSTRAP_DIR)/lxc*-$(STACK)/"; \
-			echo "Run: make bootstrap"; \
+			echo "Expected: $(BOOTSTRAP_DIR)/<app>/ or $(BOOTSTRAP_DIR)/lxc*-$(STACK)/"; \
+			echo ""; \
+			echo "Create/bootstrap the application first:"; \
+			echo "  make openbao-app APP=$(STACK)"; \
 			exit 1; \
 		fi; \
 		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
@@ -147,13 +229,15 @@ deploy:
 # Destroy
 # -------------------------------------------------------------------
 
-destroy:
+destroy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
 		exit 1; \
 	fi
+
 	@echo "WARNING: Destroying $(STACK) in 5 seconds..."
 	@sleep 5
+
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy
 
 # -------------------------------------------------------------------
