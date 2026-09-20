@@ -1,0 +1,43 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+
+    ports:
+      - "8096:8096"
+      # Uncomment if you later need Jellyfin's DLNA functionality
+      # - "1900:1900/udp"
+
+    volumes:
+      # Jellyfin configuration, database, metadata and plugins
+      - /opt/jellyfin-data/config:/config
+
+      # Transcoding/cache
+      - /opt/jellyfin-data/cache:/cache
+
+      # Your media library
+      - /opt/jellyfin-data/media:/media
+
+      # IPTV configuration / playlists if you want to keep them here
+      - /opt/jellyfin-data/iptv:/iptv
+
+    environment:
+      - TZ=Asia/Kolkata
+    #For GPU hardware transcoding
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: jellyfin
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: jellyfin
+
+    # Uncomment when GPU hardware transcoding is configured
+    # devices:
+    #   - /dev/dri:/dev/dri

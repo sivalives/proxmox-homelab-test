@@ -102,7 +102,8 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
   triggers_replace = [
     proxmox_virtual_environment_container.this.id,
     filesha256("${path.module}/docker-lxc-hook.sh"),
-    sha256(jsonencode(var.bind_mounts))
+    sha256(jsonencode(var.bind_mounts)),
+    var.gpu_passthrough
   ]
 
   connection {
@@ -120,41 +121,21 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
   provisioner "remote-exec" {
     inline = concat(
       [
-        #
-        # Make hook executable.
-        #
         "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
 
-        #
-        # Apply Proxmox LXC Docker configuration.
-        #
-        "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid}",
+        "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid} ${var.gpu_passthrough}",
 
-        #
-        # Stop the LXC before changing bind mounts.
-        # This avoids Proxmox trying to hotplug
-        # a bind mount into a running LXC.
-        #
         "pct stop ${var.vmid} || true"
       ],
 
-      #
-      # Apply host bind mounts while the LXC is stopped.
-      #
       [
         for index, mount in var.bind_mounts :
         "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
       ],
 
       [
-        #
-        # Start the LXC after all configuration is complete.
-        #
         "pct start ${var.vmid}",
 
-        #
-        # Remove temporary script.
-        #
         "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
       ]
     )
@@ -164,4 +145,3 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
     proxmox_virtual_environment_container.this
   ]
 }
-
