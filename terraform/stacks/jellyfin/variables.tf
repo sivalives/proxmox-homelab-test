@@ -150,3 +150,9 @@ variable "proxmox_ssh_private_key_file" {
   type        = string
   sensitive   = true
 }
+
+variable "gpu_passthrough" {
+  description = "Expose the Intel GPU render device /dev/dri/renderD128 to the LXC"
+  type        = bool
+  default     = false
+}
