@@ -33,7 +33,7 @@ help:
 	@echo "  terraform-init                        Initialize all Terraform stacks"
 	@echo "  plan STACK=splunk                     Plan infrastructure changes"
 	@echo "  apply STACK=splunk                    Create/update infrastructure"
-	@echo "  deploy STACK=ai                       Deploy all applications in stack"
+	@echo "  deploy STACK=ai                       Full deployment of stack"
 	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
 	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
 	@echo "  destroy STACK=splunk                  Destroy infrastructure"
@@ -164,36 +164,37 @@ apply: terraform-init
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
 
 # -------------------------------------------------------------------
-# Full Deployment
+# Deploy
 # -------------------------------------------------------------------
 #
-# Deployment flow:
+# Two deployment modes:
 #
-#   1. Git pull
-#   2. Terraform apply
-#   3. LXC bootstrap
-#   4. Docker setup
-#   5. Hawser agent setup
-#   6. OpenBao CLI + credentials
-#   7. Tailscale setup
-#   8. Deploy application stack
+# 1. Full stack deployment:
 #
-# APP is optional:
+#      make deploy STACK=ai
 #
-#   make deploy STACK=ai
-#       -> deploy all applications under ai
+#    Runs:
+#      Git pull
+#      Terraform apply
+#      LXC bootstrap
+#      Docker setup
+#      Hawser setup
+#      OpenBao credentials
+#      Tailscale setup
+#      Deploy all applications
 #
-#   make deploy STACK=ai APP=ollama
-#       -> deploy only ollama
+# 2. Application-only deployment:
 #
-# Dockhand is deployed as a normal application:
+#      make deploy STACK=ai APP=ollama
 #
-#   make deploy STACK=dockership APP=dockhand
+#    Runs ONLY:
+#      Deploy requested application
 #
-# No separate Dockhand server setup is required.
+# This avoids Terraform and infrastructure changes when only
+# redeploying an application.
 # -------------------------------------------------------------------
 
-deploy: terraform-init
+deploy:
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
 		echo ""; \
@@ -208,95 +209,92 @@ deploy: terraform-init
 		exit 1; \
 	fi
 
-	@echo ""
-	@echo "=================================================="
-	@echo " Deploying: $(STACK)"
 	@if [ -n "$(APP)" ]; then \
-		echo " Application: $(APP)"; \
-	else \
-		echo " Applications: ALL"; \
-	fi
-	@echo "=================================================="
-	@echo ""
-
-	@echo ">>> Step 1/8: Pull latest Git changes"
-	git pull --ff-only
-
-	@echo ""
-	@echo ">>> Step 2/8: Terraform apply"
-	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
-
-	@echo ""
-	@echo ">>> Waiting for LXC to become available..."
-	@sleep 10
-
-	@echo ""
-	@echo ">>> Step 3/8: LXC bootstrap"
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
-		-e stack_name=$(STACK)
-
-	@echo ""
-	@echo ">>> Step 4/8: Docker setup"
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
-		-e stack_name=$(STACK)
-
-	@echo ""
-	@echo ">>> Step 5/8: Hawser Agent setup"
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
-		-e stack_name=$(STACK)
-
-	@echo ""
-	@echo ">>> Step 6/8: OpenBao CLI + credentials"
-
-	@if [ "$(STACK)" = "openbao" ]; then \
-		echo "OpenBao server - skipping client credentials setup"; \
-	else \
-		CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" | head -1); \
-		if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ] || [ ! -f "$$CRED_DIR/secret-id" ]; then \
-			echo "ERROR: Bootstrap credentials not found for $(STACK)"; \
-			echo "Expected: $(BOOTSTRAP_DIR)/<app>/ or $(BOOTSTRAP_DIR)/lxc*-$(STACK)/"; \
-			echo ""; \
-			echo "Create/bootstrap the application first:"; \
-			echo "  make openbao-app APP=$(STACK)"; \
-			exit 1; \
-		fi; \
-		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
-		SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
-		echo "Using credentials from $$CRED_DIR"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
+		echo ""; \
+		echo "=================================================="; \
+		echo " Application Deployment"; \
+		echo " Stack: $(STACK)"; \
+		echo " App:   $(APP)"; \
+		echo "=================================================="; \
+		echo ""; \
+		echo ">>> Deploying application: $(APP)"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
 			-e stack_name=$(STACK) \
-			-e openbao_role_id="$$ROLE_ID" \
-			-e openbao_secret_id="$$SECRET_ID"; \
-	fi
-
-	@echo ""
-	@echo ">>> Step 7/8: Tailscale setup"
-
-	@if [ "$(STACK)" = "pihole" ]; then \
-		echo "Configuring Tailscale on Pi-hole..."; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
+			-e app_name=$(APP); \
+		echo ""; \
+		echo "=================================================="; \
+		echo " Application deployment complete"; \
+		echo " Stack: $(STACK)"; \
+		echo " App:   $(APP)"; \
+		echo "=================================================="; \
+	else \
+		echo ""; \
+		echo "=================================================="; \
+		echo " Full Deployment: $(STACK)"; \
+		echo " Applications: ALL"; \
+		echo "=================================================="; \
+		echo ""; \
+		echo ">>> Step 1/8: Pull latest Git changes"; \
+		git pull --ff-only; \
+		echo ""; \
+		echo ">>> Step 2/8: Terraform apply"; \
+		cd $(TERRAFORM_DIR)/$(STACK) && terraform apply; \
+		echo ""; \
+		echo ">>> Waiting for LXC to become available..."; \
+		sleep 10; \
+		echo ""; \
+		echo ">>> Step 3/8: LXC bootstrap"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
 			-e stack_name=$(STACK); \
-	else \
-		echo "Tailscale is only configured on pihole - skipping."; \
-	fi
-
-	@echo ""
-	@echo ">>> Step 8/8: Deploy stack"
-
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
-		-e stack_name=$(STACK) \
-		$(if $(APP),-e app_name=$(APP))
-
-	@echo ""
-	@echo "=================================================="
-	@echo " Deployment complete: $(STACK)"
-	@if [ -n "$(APP)" ]; then \
-		echo " Application deployed: $(APP)"; \
-	else \
+		echo ""; \
+		echo ">>> Step 4/8: Docker setup"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
+			-e stack_name=$(STACK); \
+		echo ""; \
+		echo ">>> Step 5/8: Hawser Agent setup"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
+			-e stack_name=$(STACK); \
+		echo ""; \
+		echo ">>> Step 6/8: OpenBao CLI + credentials"; \
+		if [ "$(STACK)" = "openbao" ]; then \
+			echo "OpenBao server - skipping client credentials setup"; \
+		else \
+			CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" | head -1); \
+			if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ] || [ ! -f "$$CRED_DIR/secret-id" ]; then \
+				echo "ERROR: Bootstrap credentials not found for $(STACK)"; \
+				echo "Expected: $(BOOTSTRAP_DIR)/<app>/ or $(BOOTSTRAP_DIR)/lxc*-$(STACK)/"; \
+				echo ""; \
+				echo "Create/bootstrap the application first:"; \
+				echo "  make openbao-app APP=$(STACK)"; \
+				exit 1; \
+			fi; \
+			ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
+			SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
+			echo "Using credentials from $$CRED_DIR"; \
+			$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
+				-e stack_name=$(STACK) \
+				-e openbao_role_id="$$ROLE_ID" \
+				-e openbao_secret_id="$$SECRET_ID"; \
+		fi; \
+		echo ""; \
+		echo ">>> Step 7/8: Tailscale setup"; \
+		if [ "$(STACK)" = "pihole" ]; then \
+			echo "Configuring Tailscale on Pi-hole..."; \
+			$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
+				-e stack_name=$(STACK); \
+		else \
+			echo "Tailscale is only configured on pihole - skipping."; \
+		fi; \
+		echo ""; \
+		echo ">>> Step 8/8: Deploy stack"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
+			-e stack_name=$(STACK); \
+		echo ""; \
+		echo "=================================================="; \
+		echo " Full deployment complete: $(STACK)"; \
 		echo " Applications deployed: ALL"; \
+		echo "=================================================="; \
 	fi
-	@echo "=================================================="
-	@echo ""
 
 # -------------------------------------------------------------------
 # Destroy
