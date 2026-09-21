@@ -1,40 +1,10 @@
 ---
-# -------------------------------------------------------------------
-# Dockhand / Hawser
-# -------------------------------------------------------------------
+hawser_data_dir: /opt/homelab/hawser
+hawser_token_file: "{{ hawser_data_dir }}/token"
+hawser_compose_dir: /opt/homelab/hawser
 
-hawser_container_name: hawser
-hawser_image: ghcr.io/finsys/hawser:latest
+hawser_image: "ghcr.io/finsys/hawser:latest"
 
-# Central Dockhand instance
 dockhand_server_url: "ws://192.168.1.106:3000/api/hawser/connect"
 
-# -------------------------------------------------------------------
-# Homelab paths
-# -------------------------------------------------------------------
-
-homelab_root: /opt/homelab
-
-stacks_dir: "{{ homelab_root }}/stacks"
-hawser_data_dir: "{{ homelab_root }}/hawser"
-
-hawser_token_file: "{{ hawser_data_dir }}/token"
-
-# -------------------------------------------------------------------
-# OpenBao
-# -------------------------------------------------------------------
-
 openbao_addr: "http://192.168.1.101:8200"
-
-openbao_secret_path: "secret/data/shared"
-
-# These should point to the AppRole credentials already staged
-# on the Ansible controller.
-openbao_role_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/role-id"
-openbao_secret_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/secret-id"
-
-openbao_role_id: ""
-openbao_secret_id: ""
-
-# Key inside secret/shared
-openbao_hawser_token_key: "HAWSER_TOKEN"

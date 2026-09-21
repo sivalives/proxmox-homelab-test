@@ -1,0 +1,16 @@
+services:
+  hawser:
+    image: {{ hawser_image }}
+    container_name: hawser
+    restart: unless-stopped
+
+    environment:
+      DOCKER_SOCKET: /var/run/docker.sock
+      STACKS_DIR: /opt/homelab/stacks
+      DOCKHAND_SERVER_URL: {{ dockhand_server_url }}
+      TOKEN_FILE: /run/secrets/hawser_token
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/homelab/stacks:/opt/homelab/stacks
+      - {{ hawser_token_file }}:/run/secrets/hawser_token:ro

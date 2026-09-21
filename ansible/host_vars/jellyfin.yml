@@ -1,0 +1,2 @@
+# ansible/host_vars/jellyfin.yml
+hawser_openbao_secret: "secret/lxc107-jellyfin"

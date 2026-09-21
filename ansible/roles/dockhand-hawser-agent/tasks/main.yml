@@ -1,65 +1,40 @@
 ---
-# ================================================================
-# Directories
-# ================================================================
+- name: Validate Hawser OpenBao secret path
+  ansible.builtin.assert:
+    that:
+      - hawser_openbao_secret is defined
+      - hawser_openbao_secret | length > 0
+    fail_msg: >
+      hawser_openbao_secret must be defined for {{ inventory_hostname }}
+      (example: secret/lxc102-splunk)
 
-- name: Create homelab root directory
-  ansible.builtin.file:
-    path: "{{ homelab_root }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Validate OpenBao credentials exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /var/lib/openbao/role-id
+    - /var/lib/openbao/secret-id
+  register: openbao_credential_files
 
-- name: Create Hawser data directory
-  ansible.builtin.file:
-    path: "{{ hawser_data_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
-
-- name: Create stacks directory
-  ansible.builtin.file:
-    path: "{{ stacks_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-
-# ================================================================
-# OpenBao - load AppRole credentials on controller
-# ================================================================
+- name: Validate OpenBao credential files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.size > 0
+    fail_msg: "Missing or empty OpenBao credential file: {{ item.item }}"
+  loop: "{{ openbao_credential_files.results }}"
 
 - name: Read OpenBao role ID
-  ansible.builtin.set_fact:
-    openbao_role_id_value: >-
-      {{
-        openbao_role_id
-        if openbao_role_id | length > 0
-        else lookup('ansible.builtin.file', openbao_role_id_file)
-      }}
-  delegate_to: localhost
-  become: false
+  ansible.builtin.slurp:
+    src: /var/lib/openbao/role-id
+  register: openbao_role_id_raw
   no_log: true
 
 - name: Read OpenBao secret ID
-  ansible.builtin.set_fact:
-    openbao_secret_id_value: >-
-      {{
-        openbao_secret_id
-        if openbao_secret_id | length > 0
-        else lookup('ansible.builtin.file', openbao_secret_id_file)
-      }}
-  delegate_to: localhost
-  become: false
+  ansible.builtin.slurp:
+    src: /var/lib/openbao/secret-id
+  register: openbao_secret_id_raw
   no_log: true
-
-
-# ================================================================
-# OpenBao - AppRole login
-# ================================================================
 
 - name: Authenticate to OpenBao using AppRole
   ansible.builtin.uri:
@@ -67,181 +42,93 @@
     method: POST
     body_format: json
     body:
-      role_id: "{{ openbao_role_id_value }}"
-      secret_id: "{{ openbao_secret_id_value }}"
+      role_id: "{{ openbao_role_id_raw.content | b64decode | trim }}"
+      secret_id: "{{ openbao_secret_id_raw.content | b64decode | trim }}"
     return_content: true
     status_code: 200
   register: openbao_login
-  delegate_to: localhost
-  become: false
   no_log: true
 
+- name: Extract OpenBao client token
+  ansible.builtin.set_fact:
+    openbao_token: "{{ openbao_login.json.auth.client_token }}"
+  no_log: true
 
-# ================================================================
-# OpenBao - read shared secret
-# ================================================================
-
-- name: Read shared secrets from OpenBao
+- name: Read Hawser secret from OpenBao
   ansible.builtin.uri:
-    url: "{{ openbao_addr }}/v1/{{ openbao_secret_path }}"
+    url: "{{ openbao_addr }}/v1/{{ hawser_openbao_secret }}"
     method: GET
     headers:
-      X-Vault-Token: "{{ openbao_login.json.auth.client_token }}"
+      X-Vault-Token: "{{ openbao_token }}"
     return_content: true
     status_code: 200
-  register: openbao_shared
-  delegate_to: localhost
-  become: false
+  register: hawser_secret
   no_log: true
-
-
-# ================================================================
-# Extract Hawser token
-# ================================================================
 
 - name: Extract Hawser token
   ansible.builtin.set_fact:
-    hawser_token: >-
-      {{
-        openbao_shared.json.data.data[openbao_hawser_token_key]
-      }}
-  delegate_to: localhost
-  become: false
+    hawser_token: "{{ hawser_secret.json.data.data.HAWSER_TOKEN }}"
   no_log: true
 
-- name: Validate Hawser token exists
+- name: Validate Hawser token
   ansible.builtin.assert:
     that:
       - hawser_token is defined
       - hawser_token | length > 0
-    fail_msg: >-
-      HAWSER_TOKEN was not found in OpenBao secret/shared.
-  delegate_to: localhost
-  become: false
+    fail_msg: >
+      HAWSER_TOKEN is missing from {{ hawser_openbao_secret }}
   no_log: true
 
-
-# ================================================================
-# Store token securely on Docker host
-# ================================================================
+- name: Create Hawser directory
+  ansible.builtin.file:
+    path: "{{ hawser_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Write Hawser token
   ansible.builtin.copy:
-    content: "{{ hawser_token }}"
+    content: "{{ hawser_token }}\n"
     dest: "{{ hawser_token_file }}"
     owner: root
     group: root
     mode: "0600"
   no_log: true
 
+- name: Ensure Hawser Compose directory exists
+  ansible.builtin.file:
+    path: "{{ hawser_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-# ================================================================
-# Hawser Compose
-# ================================================================
-
-- name: Create Hawser compose file
-  ansible.builtin.copy:
-    dest: "{{ hawser_data_dir }}/compose.yml"
+- name: Deploy Hawser Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ hawser_compose_dir }}/compose.yml"
     owner: root
     group: root
     mode: "0644"
-    content: |
-      services:
-        hawser:
-          image: {{ hawser_image }}
-          container_name: {{ hawser_container_name }}
-          restart: unless-stopped
-
-          environment:
-            DOCKHAND_SERVER_URL: "{{ dockhand_server_url }}"
-            TOKEN_FILE: /run/secrets/hawser_token
-            DOCKER_SOCKET: /var/run/docker.sock
-            STACKS_DIR: "{{ stacks_dir }}"
-
-          volumes:
-            - /var/run/docker.sock:/var/run/docker.sock
-            - {{ stacks_dir }}:{{ stacks_dir }}
-            - {{ hawser_token_file }}:/run/secrets/hawser_token:ro
-
-          healthcheck:
-            test:
-              - CMD
-              - wget
-              - -q
-              - --spider
-              - http://localhost:2376/_hawser/health
-            interval: 30s
-            timeout: 5s
-            retries: 3
-            start_period: 10s
-
-
-# ================================================================
-# Pull image
-# ================================================================
-
-- name: Pull Hawser image
-  ansible.builtin.command:
-    cmd: docker compose -f compose.yml pull
-    chdir: "{{ hawser_data_dir }}"
-  register: hawser_pull
-  changed_when: false
-
-
-# ================================================================
-# Start Hawser
-# ================================================================
 
 - name: Start Hawser
   ansible.builtin.command:
-    cmd: docker compose -f compose.yml up -d
-    chdir: "{{ hawser_data_dir }}"
+    cmd: docker compose up -d
+    chdir: "{{ hawser_compose_dir }}"
   register: hawser_compose
   changed_when: >
-    'Created' in hawser_compose.stdout or
     'Started' in hawser_compose.stdout or
+    'Created' in hawser_compose.stdout or
     'Recreated' in hawser_compose.stdout
 
-
-# ================================================================
-# Verify container
-# ================================================================
-
-- name: Verify Hawser container
+- name: Display Hawser deployment status
   ansible.builtin.command:
-    cmd: >
-      docker ps
-      --filter name={{ hawser_container_name }}
-      --format "{{ '{{' }}.Names{{ '}}' }}"
-  register: hawser_container
+    cmd: docker compose ps
+    chdir: "{{ hawser_compose_dir }}"
+  register: hawser_status
   changed_when: false
-
-- name: Assert Hawser is running
-  ansible.builtin.assert:
-    that:
-      - hawser_container.stdout == hawser_container_name
-    fail_msg: "Hawser container is not running"
-
-
-# ================================================================
-# Verify Hawser health
-# ================================================================
-
-- name: Check Hawser health
-  ansible.builtin.command:
-    cmd: >
-      docker inspect
-      --format="{{ '{{' }}.State.Health.Status{{ '}}' }}"
-      {{ hawser_container_name }}
-  register: hawser_health
-  changed_when: false
-  retries: 10
-  delay: 3
-  until: hawser_health.stdout == "healthy"
 
 - name: Show Hawser status
   ansible.builtin.debug:
-    msg:
-      - "Hawser is running on {{ inventory_hostname }}"
-      - "Dockhand: {{ dockhand_server_url }}"
-      - "Hawser health: {{ hawser_health.stdout }}"
+    var: hawser_status.stdout_lines
