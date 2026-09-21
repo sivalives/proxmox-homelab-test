@@ -1,2 +1,2 @@
 # ansible/host_vars/ai.yml
-hawser_openbao_secret: "secret/ai"
+hawser_openbao_path: "secret/ai"
