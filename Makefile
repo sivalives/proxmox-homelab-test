@@ -1,6 +1,6 @@
-# Homelab Makefile - Terraform + Ansible + OpenBao
+# Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy clean
+.PHONY: help bootstrap openbao-app dockhand-setup terraform-init plan apply destroy deploy clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -20,15 +20,17 @@ ANSIBLE_PLAYBOOK := ansible-playbook
 
 help:
 	@echo ""
-	@echo "Homelab - Terraform + Ansible + OpenBao"
+	@echo "Homelab - Terraform + Ansible + OpenBao + Dockhand"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make <target> STACK=<stack_name>"
 	@echo "  make openbao-app APP=<app_name>"
+	@echo "  make dockhand-setup"
 	@echo ""
 	@echo "Targets:"
 	@echo "  bootstrap                    One-time: Setup OpenBao server"
 	@echo "  openbao-app APP=dockership   Create/update OpenBao app + AppRole"
+	@echo "  dockhand-setup               Install/configure Dockhand on dockership"
 	@echo "  terraform-init               Initialize all Terraform stacks"
 	@echo "  plan STACK=splunk            Plan infrastructure changes"
 	@echo "  apply STACK=splunk           Create/update infrastructure"
@@ -75,11 +77,39 @@ openbao-app:
 	@echo "=================================================="
 	@echo ""
 
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app.yml
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app.yml \
+		-e app_name=$(APP)
 
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao application bootstrap complete: $(APP)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Dockhand Server Setup
+# -------------------------------------------------------------------
+#
+# Installs the central Dockhand server on CT106 (dockership).
+#
+# Dockhand is the central management UI/server.
+# Hawser agents on remote Docker LXCs connect to Dockhand.
+#
+# This is separate from the normal per-LXC deploy.
+# -------------------------------------------------------------------
+
+dockhand-setup:
+	@echo ""
+	@echo "=================================================="
+	@echo " Dockhand Server Setup"
+	@echo "=================================================="
+	@echo ""
+
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockhand-server.yml
+
+	@echo ""
+	@echo "=================================================="
+	@echo " Dockhand Server setup complete"
 	@echo "=================================================="
 	@echo ""
 
@@ -112,7 +142,7 @@ terraform-init:
 	@echo "Terraform initialization complete."
 
 # -------------------------------------------------------------------
-# Terraform
+# Terraform Plan
 # -------------------------------------------------------------------
 
 plan: terraform-init
@@ -125,6 +155,10 @@ plan: terraform-init
 	@echo ""
 	@echo ">>> Terraform plan: $(STACK)"
 	cd $(TERRAFORM_DIR)/$(STACK) && terraform plan
+
+# -------------------------------------------------------------------
+# Terraform Apply
+# -------------------------------------------------------------------
 
 apply: terraform-init
 	@if [ -z "$(STACK)" ]; then \
@@ -140,10 +174,29 @@ apply: terraform-init
 # -------------------------------------------------------------------
 # Full Deployment
 # -------------------------------------------------------------------
+#
+# Deployment flow:
+#
+#   1. Git pull
+#   2. Terraform apply
+#   3. LXC bootstrap
+#   4. Docker setup
+#   5. Hawser agent setup
+#   6. OpenBao CLI + credentials
+#   7. Tailscale setup
+#   8. Deploy application stack
+#
+# Dockhand server is intentionally NOT installed here.
+# Use:
+#
+#   make dockhand-setup
+#
+# -------------------------------------------------------------------
 
 deploy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
+		echo "Usage: make deploy STACK=splunk"; \
 		exit 1; \
 	fi
 
@@ -175,8 +228,8 @@ deploy: terraform-init
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 5/8: Dockhand Agent setup"
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockhand.yml \
+	@echo ">>> Step 5/8: Hawser Agent setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""
@@ -232,6 +285,7 @@ deploy: terraform-init
 destroy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
+		echo "Usage: make destroy STACK=splunk"; \
 		exit 1; \
 	fi
 
