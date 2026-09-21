@@ -56,7 +56,7 @@
 
 - name: Read application secret from OpenBao
   ansible.builtin.uri:
-    url: "{{ openbao_addr }}/v1/{{ hawser_openbao_path }}"
+    url: "{{ openbao_addr }}/v1/secret/data/{{ hawser_openbao_path | regex_replace('^secret/', '') }}"
     method: GET
     headers:
       X-Vault-Token: "{{ openbao_token }}"
