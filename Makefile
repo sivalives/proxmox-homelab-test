@@ -28,15 +28,16 @@ help:
 	@echo "  make openbao-app APP=<app_name>"
 	@echo ""
 	@echo "Targets:"
-	@echo "  bootstrap                       One-time: Setup OpenBao server"
-	@echo "  openbao-app APP=dockership     Create/update OpenBao app + AppRole"
-	@echo "  terraform-init                 Initialize all Terraform stacks"
-	@echo "  plan STACK=splunk              Plan infrastructure changes"
-	@echo "  apply STACK=splunk             Create/update infrastructure"
-	@echo "  deploy STACK=splunk            Full deployment"
-	@echo "  deploy STACK=ai APP=ollama     Deploy one application"
-	@echo "  destroy STACK=splunk            Destroy infrastructure"
-	@echo "  clean                           Clean Terraform cache"
+	@echo "  bootstrap                              One-time: Setup OpenBao server"
+	@echo "  openbao-app APP=dockership            Create/update OpenBao app + AppRole"
+	@echo "  terraform-init                        Initialize all Terraform stacks"
+	@echo "  plan STACK=splunk                     Plan infrastructure changes"
+	@echo "  apply STACK=splunk                    Create/update infrastructure"
+	@echo "  deploy STACK=ai                       Deploy all applications in stack"
+	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
+	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
+	@echo "  destroy STACK=splunk                  Destroy infrastructure"
+	@echo "  clean                                  Clean Terraform cache"
 	@echo ""
 
 # -------------------------------------------------------------------
@@ -67,7 +68,13 @@ bootstrap:
 openbao-app:
 	@if [ -z "$(APP)" ]; then \
 		echo "ERROR: APP required"; \
-		echo "Usage: make openbao-app APP=dockership"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make openbao-app APP=<app_name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make openbao-app APP=dockership"; \
+		echo "  make openbao-app APP=ai"; \
 		exit 1; \
 	fi
 
@@ -121,7 +128,13 @@ terraform-init:
 plan: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
-		echo "Usage: make plan STACK=splunk"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make plan STACK=<stack_name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make plan STACK=ai"; \
+		echo "  make plan STACK=splunk"; \
 		exit 1; \
 	fi
 
@@ -136,7 +149,13 @@ plan: terraform-init
 apply: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
-		echo "Usage: make apply STACK=splunk"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make apply STACK=<stack_name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make apply STACK=ai"; \
+		echo "  make apply STACK=splunk"; \
 		exit 1; \
 	fi
 
@@ -177,7 +196,15 @@ apply: terraform-init
 deploy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
-		echo "Usage: make deploy STACK=splunk"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make deploy STACK=<stack_name>"; \
+		echo "  make deploy STACK=<stack_name> APP=<app_name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make deploy STACK=ai"; \
+		echo "  make deploy STACK=ai APP=ollama"; \
+		echo "  make deploy STACK=dockership APP=dockhand"; \
 		exit 1; \
 	fi
 
@@ -278,7 +305,13 @@ deploy: terraform-init
 destroy: terraform-init
 	@if [ -z "$(STACK)" ]; then \
 		echo "ERROR: STACK required"; \
-		echo "Usage: make destroy STACK=splunk"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make destroy STACK=<stack_name>"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make destroy STACK=ai"; \
+		echo "  make destroy STACK=splunk"; \
 		exit 1; \
 	fi
 
