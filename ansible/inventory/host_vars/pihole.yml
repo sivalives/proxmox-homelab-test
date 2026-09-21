@@ -1,2 +1,2 @@
 # ansible/host_vars/pihole.yml
-hawser_openbao_secret: "secret/lxc104-pihole"
+hawser_openbao_secret: "secret/pihole"

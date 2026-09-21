@@ -1,2 +1,2 @@
 # ansible/host_vars/immich.yml
-hawser_openbao_secret: "secret/lxc103-immich"
+hawser_openbao_secret: "secret/immich"

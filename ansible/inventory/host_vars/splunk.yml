@@ -1,2 +1,2 @@
 # ansible/host_vars/splunk.yml
-hawser_openbao_secret: "secret/lxc102-splunk"
+hawser_openbao_secret: "secret/splunk"
