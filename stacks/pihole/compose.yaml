@@ -16,13 +16,13 @@ services:
       FTLCONF_dns_hosts: |
         192.168.1.106 pihole.lan
         192.168.1.106 splunk.lan
-        192.168.1.106 dockge.lan
         192.168.1.106 vaultwarden.lan
         192.168.1.106 rabbitmq.lan
         192.168.1.106 npm.lan
         192.168.1.106 immich.lan
         192.168.1.106 openbao.lan
         192.168.1.106 jellyfin.lan
+        192.168.1.106 docker.lan
     volumes:
       - /opt/pihole-data:/etc/pihole
     cap_add:
