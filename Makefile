@@ -175,8 +175,8 @@ deploy: terraform-init
 		-e stack_name=$(STACK)
 
 	@echo ""
-	@echo ">>> Step 5/8: Dockge setup"
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockge.yml \
+	@echo ">>> Step 5/8: Dockhand Agent setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockhand.yml \
 		-e stack_name=$(STACK)
 
 	@echo ""

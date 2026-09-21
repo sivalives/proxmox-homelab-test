@@ -1,0 +1,8 @@
+---
+- name: Install Hawser for Dockhand on Docker hosts
+  hosts: "{{ stack_name }}"
+  become: false
+  gather_facts: false
+
+  roles:
+    - dockhand

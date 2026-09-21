@@ -1,0 +1,13 @@
+services:
+  dockhand:
+    image: ghcr.io/finsys/dockhand:latest
+    container_name: dockhand
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/docker-data/dockhand/data:/app/data
+      - /opt/homelab/stacks:/opt/homelab/stacks
