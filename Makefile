@@ -217,7 +217,10 @@ deploy:
 		echo " App:   $(APP)"; \
 		echo "=================================================="; \
 		echo ""; \
-		echo ">>> Deploying application: $(APP)"; \
+		echo ">>> Step 1/2: Pull latest Git changes"; \
+		git pull --ff-only; \
+		echo ""; \
+		echo ">>> Step 2/2: Deploying application: $(APP)"; \
 		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
 			-e stack_name=$(STACK) \
 			-e app_name=$(APP); \
