@@ -1,6 +1,6 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-app dockhand-setup terraform-init plan apply destroy deploy clean
+.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -20,23 +20,23 @@ ANSIBLE_PLAYBOOK := ansible-playbook
 
 help:
 	@echo ""
-	@echo "Homelab - Terraform + Ansible + OpenBao + Dockhand"
+	@echo "Homelab - Terraform + Ansible + OpenBao + Dockhand/Hawser"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make <target> STACK=<stack_name>"
+	@echo "  make deploy STACK=<stack_name> [APP=<app_name>]"
 	@echo "  make openbao-app APP=<app_name>"
-	@echo "  make dockhand-setup"
 	@echo ""
 	@echo "Targets:"
-	@echo "  bootstrap                    One-time: Setup OpenBao server"
-	@echo "  openbao-app APP=dockership   Create/update OpenBao app + AppRole"
-	@echo "  dockhand-setup               Install/configure Dockhand on dockership"
-	@echo "  terraform-init               Initialize all Terraform stacks"
-	@echo "  plan STACK=splunk            Plan infrastructure changes"
-	@echo "  apply STACK=splunk           Create/update infrastructure"
-	@echo "  deploy STACK=splunk          Full deployment"
-	@echo "  destroy STACK=splunk         Destroy infrastructure"
-	@echo "  clean                        Clean Terraform cache"
+	@echo "  bootstrap                       One-time: Setup OpenBao server"
+	@echo "  openbao-app APP=dockership     Create/update OpenBao app + AppRole"
+	@echo "  terraform-init                 Initialize all Terraform stacks"
+	@echo "  plan STACK=splunk              Plan infrastructure changes"
+	@echo "  apply STACK=splunk             Create/update infrastructure"
+	@echo "  deploy STACK=splunk            Full deployment"
+	@echo "  deploy STACK=ai APP=ollama     Deploy one application"
+	@echo "  destroy STACK=splunk            Destroy infrastructure"
+	@echo "  clean                           Clean Terraform cache"
 	@echo ""
 
 # -------------------------------------------------------------------
@@ -83,33 +83,6 @@ openbao-app:
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao application bootstrap complete: $(APP)"
-	@echo "=================================================="
-	@echo ""
-
-# -------------------------------------------------------------------
-# Dockhand Server Setup
-# -------------------------------------------------------------------
-#
-# Installs the central Dockhand server on CT106 (dockership).
-#
-# Dockhand is the central management UI/server.
-# Hawser agents on remote Docker LXCs connect to Dockhand.
-#
-# This is separate from the normal per-LXC deploy.
-# -------------------------------------------------------------------
-
-dockhand-setup:
-	@echo ""
-	@echo "=================================================="
-	@echo " Dockhand Server Setup"
-	@echo "=================================================="
-	@echo ""
-
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/dockhand-server.yml
-
-	@echo ""
-	@echo "=================================================="
-	@echo " Dockhand Server setup complete"
 	@echo "=================================================="
 	@echo ""
 
@@ -186,11 +159,19 @@ apply: terraform-init
 #   7. Tailscale setup
 #   8. Deploy application stack
 #
-# Dockhand server is intentionally NOT installed here.
-# Use:
+# APP is optional:
 #
-#   make dockhand-setup
+#   make deploy STACK=ai
+#       -> deploy all applications under ai
 #
+#   make deploy STACK=ai APP=ollama
+#       -> deploy only ollama
+#
+# Dockhand is deployed as a normal application:
+#
+#   make deploy STACK=dockership APP=dockhand
+#
+# No separate Dockhand server setup is required.
 # -------------------------------------------------------------------
 
 deploy: terraform-init
@@ -203,6 +184,11 @@ deploy: terraform-init
 	@echo ""
 	@echo "=================================================="
 	@echo " Deploying: $(STACK)"
+	@if [ -n "$(APP)" ]; then \
+		echo " Application: $(APP)"; \
+	else \
+		echo " Applications: ALL"; \
+	fi
 	@echo "=================================================="
 	@echo ""
 
@@ -269,12 +255,19 @@ deploy: terraform-init
 
 	@echo ""
 	@echo ">>> Step 8/8: Deploy stack"
+
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
-		-e stack_name=$(STACK)
+		-e stack_name=$(STACK) \
+		$(if $(APP),-e app_name=$(APP))
 
 	@echo ""
 	@echo "=================================================="
 	@echo " Deployment complete: $(STACK)"
+	@if [ -n "$(APP)" ]; then \
+		echo " Application deployed: $(APP)"; \
+	else \
+		echo " Applications deployed: ALL"; \
+	fi
 	@echo "=================================================="
 	@echo ""
 
