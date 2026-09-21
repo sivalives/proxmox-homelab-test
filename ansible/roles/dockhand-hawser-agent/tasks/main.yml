@@ -1,14 +1,14 @@
 ---
-- name: Validate Hawser OpenBao secret path
+- name: Validate Hawser OpenBao path
   ansible.builtin.assert:
     that:
-      - hawser_openbao_secret is defined
-      - hawser_openbao_secret | length > 0
+      - hawser_openbao_path is defined
+      - hawser_openbao_path | length > 0
     fail_msg: >
-      hawser_openbao_secret must be defined for {{ inventory_hostname }}
-      (example: secret/lxc102-splunk)
+      hawser_openbao_path must be defined for {{ inventory_hostname }}
+      (example: secret/splunk)
 
-- name: Validate OpenBao credentials exist
+- name: Validate OpenBao credential files
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -16,7 +16,7 @@
     - /var/lib/openbao/secret-id
   register: openbao_credential_files
 
-- name: Validate OpenBao credential files
+- name: Validate OpenBao credentials
   ansible.builtin.assert:
     that:
       - item.stat.exists
@@ -54,9 +54,9 @@
     openbao_token: "{{ openbao_login.json.auth.client_token }}"
   no_log: true
 
-- name: Read Hawser secret from OpenBao
+- name: Read application secret from OpenBao
   ansible.builtin.uri:
-    url: "{{ openbao_addr }}/v1/{{ hawser_openbao_secret }}"
+    url: "{{ openbao_addr }}/v1/{{ hawser_openbao_path }}"
     method: GET
     headers:
       X-Vault-Token: "{{ openbao_token }}"
@@ -76,7 +76,7 @@
       - hawser_token is defined
       - hawser_token | length > 0
     fail_msg: >
-      HAWSER_TOKEN is missing from {{ hawser_openbao_secret }}
+      HAWSER_TOKEN is missing from {{ hawser_openbao_path }}
   no_log: true
 
 - name: Create Hawser directory
