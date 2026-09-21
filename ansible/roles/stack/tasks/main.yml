@@ -23,7 +23,7 @@
 # Find Compose projects in copied directory
 # -------------------------------------------------------------------
 
-- name: Find Compose projects in copied directory
+- name: Find all Compose projects in copied stack
   ansible.builtin.find:
     paths: "{{ stacks_root }}/{{ stack_name }}"
     patterns:
@@ -33,13 +33,23 @@
       - "docker-compose.yaml"
     recurse: true
     file_type: file
-  register: compose_files
+  register: all_compose_files
 
-- name: Assert Compose projects exist
-  ansible.builtin.assert:
-    that:
-      - compose_files.files | length > 0
-    fail_msg: "No compose files found under {{ stacks_root }}/{{ stack_name }}"
+- name: Select requested application Compose file
+  ansible.builtin.set_fact:
+    compose_files:
+      files: >-
+        {{
+          all_compose_files.files
+          | selectattr('path', 'search', '/' ~ app_name ~ '/(compose\.yml|compose\.yaml|docker-compose\.yml|docker-compose\.yaml)$')
+          | list
+        }}
+  when: app_name is defined
+
+- name: Select all Compose files when no application specified
+  ansible.builtin.set_fact:
+    compose_files: "{{ all_compose_files }}"
+  when: app_name is not defined
 
 # -------------------------------------------------------------------
 # Deploy each Compose project
