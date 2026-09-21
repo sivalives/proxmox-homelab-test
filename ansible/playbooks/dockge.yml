@@ -1,9 +1,0 @@
-#playbooks/dockge.yml
----
-- name: Install Dockge on all Docker hosts
-  hosts: "{{ stack_name }}"
-  become: false
-  gather_facts: false
-
-  roles:
-    - dockge
