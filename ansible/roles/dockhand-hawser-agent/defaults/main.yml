@@ -30,8 +30,8 @@ openbao_secret_path: "secret/data/shared"
 
 # These should point to the AppRole credentials already staged
 # on the Ansible controller.
-openbao_role_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/role_id"
-openbao_secret_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/secret_id"
+openbao_role_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/role-id"
+openbao_secret_id_file: "/opt/homelab/proxmox-homelab-v1/stacks/openbao/bootstrap/lxc106-dockership/secret-id"
 
 openbao_role_id: ""
 openbao_secret_id: ""
