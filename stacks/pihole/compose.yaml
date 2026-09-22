@@ -23,6 +23,7 @@ services:
         192.168.1.106 openbao.lan
         192.168.1.106 jellyfin.lan
         192.168.1.106 docker.lan
+        192.168.1.106 homepage.lan
     volumes:
       - /opt/pihole-data:/etc/pihole
     cap_add:
