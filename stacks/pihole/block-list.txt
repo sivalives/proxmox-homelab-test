@@ -1,0 +1,7 @@
+| # | List                             | URL                                                                                                                |
+| - | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1 | **HaGeZi Multi PRO**             | `https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt`                                         |
+| 2 | **HaGeZi TIF Medium**            | `https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.medium.txt`                                  |
+| 3 | **AdGuard DNS Filter**           | `https://filters.adtidy.org/extension/chromium/filters/15.txt`                                                     |
+| 4 | **OISD Big**                     | `https://big.oisd.nl`                                                                                              |
+| 5 | **DandelionSprout Anti-Malware** | `https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt` |
