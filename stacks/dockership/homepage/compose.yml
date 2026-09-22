@@ -1,0 +1,25 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "192.168.1.106,homepage.lan"
+
+    volumes:
+      - /opt/docker-data/homepage/config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: homepage
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: homepage
