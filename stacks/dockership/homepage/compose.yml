@@ -9,9 +9,14 @@ services:
 
     environment:
       HOMEPAGE_ALLOWED_HOSTS: "192.168.1.106:3001,homepage.lan"
-
     volumes:
-      - /opt/docker-data/homepage/config:/app/config
+      # Git/Ansible-managed Homepage configuration
+      - ./config:/app/config
+
+      # Persistent application data
+      - /opt/docker-data/homepage/data:/app/data
+
+      # Docker integration
       - /var/run/docker.sock:/var/run/docker.sock:ro
     logging:
       driver: splunk
