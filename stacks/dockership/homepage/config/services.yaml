@@ -27,19 +27,19 @@
 
     - OpenBao:
         icon: openbao.png
-        href: http://192.168.1.101:8200
+        href: http://openbao.lan
         description: Secrets Management
 
 
 - AI:
     - Open WebUI:
         icon: open-webui.png
-        href: http://192.168.1.105:3000
+        href: http://openwebui.lan
         description: AI Chat Interface
 
     - Ollama:
         icon: ollama.png
-        href: http://192.168.1.105:11434
+        href: http://ollama.lan
         description: Local LLM Runtime
 
     - Docker MCP:
@@ -51,7 +51,7 @@
 - Media:
     - Immich:
         icon: immich.png
-        href: http://192.168.1.103:2283
+        href: http://immich.lan
         description: Photos & Videos
 
     - Jellyfin:
@@ -70,5 +70,5 @@
 - Observability:
     - Splunk:
         icon: splunk.png
-        href: http://splunk.lan:8000
+        href: http://splunk.lan
         description: Logs & Security Analytics
