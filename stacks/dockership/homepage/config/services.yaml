@@ -1,0 +1,74 @@
+- Infrastructure:
+    - Nginx Proxy Manager:
+        icon: nginx-proxy-manager.png
+        href: http://npm.lan
+        description: Reverse Proxy
+        server: local
+        container: nginx-proxy-manager
+
+    - Dockhand:
+        icon: dockhand.png
+        href: http://dockhand.lan
+        description: Docker Management
+        server: local
+        container: dockhand
+
+    - Homepage:
+        icon: homepage.png
+        href: http://homepage.lan
+        description: Homelab Dashboard
+        server: local
+        container: homepage
+
+    - Pi-hole:
+        icon: pi-hole.png
+        href: http://pihole.lan/admin
+        description: DNS & Ad Blocking
+
+    - OpenBao:
+        icon: openbao.png
+        href: http://192.168.1.101:8200
+        description: Secrets Management
+
+
+- AI:
+    - Open WebUI:
+        icon: open-webui.png
+        href: http://192.168.1.105:3000
+        description: AI Chat Interface
+
+    - Ollama:
+        icon: ollama.png
+        href: http://192.168.1.105:11434
+        description: Local LLM Runtime
+
+    - Docker MCP:
+        icon: docker.png
+        href: http://192.168.1.105:8000
+        description: Docker MCP Server
+
+
+- Media:
+    - Immich:
+        icon: immich.png
+        href: http://192.168.1.103:2283
+        description: Photos & Videos
+
+    - Jellyfin:
+        icon: jellyfin.png
+        href: http://jellyfin.lan
+        description: Media Server
+
+
+- Security:
+    - Vaultwarden:
+        icon: vaultwarden.png
+        href: http://vaultwarden.lan
+        description: Password Manager
+
+
+- Observability:
+    - Splunk:
+        icon: splunk.png
+        href: http://splunk.lan:8000
+        description: Logs & Security Analytics
