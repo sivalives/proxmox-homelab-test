@@ -74,19 +74,27 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy Alerts:
+    - Ntfy Latest:
         icon: ntfy
         href: http://ntfy.lan
-        description: Push Notifications
+        description: Current Alert
+        widget:
+          type: ntfy
+          url: http://192.168.1.106:8080
+          topic: proxmox_alerts
+          username: siva
+          password: siva
+
+    - Ntfy History:
+        icon: ntfy
+        href: http://ntfy.lan
+        description: Past 24 Hours Log
         widget:
           type: customapi
           url: http://192.168.1
           method: GET
           headers:
             Authorization: Basic c2l2YTpzaXZh
-          display: dynamic-list             # <-- Tells Homepage to unpack a JSON array
           mappings:
-            name: title                     # <-- Left side: Notification Title (or 'time')
-            label: message                  # <-- Right side: The main body text
-            limit: 5                        # <-- Strictly limits output to the last 5 items
-            format: text
+            - field: .[0].message
+              label: "Previous Alert"
