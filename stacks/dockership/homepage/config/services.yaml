@@ -72,3 +72,15 @@
         icon: splunk.png
         href: http://splunk.lan
         description: Logs & Security Analytics
+
+- Messaging:
+    - Ntfy:
+        icon: ntfy
+        href: http://ntfy.lan       # Your Nginx reverse proxy URL
+        description: Push Notifications
+        widget:
+          type: ntfy
+          url: http://192.168.1.106:8080 # Points directly to the Docker container port
+          topic: proxmox_alerts                 # The specific topic you want to display
+          username: siva              # Your created ntfy user
+          password: siva              # Your created ntfy password
