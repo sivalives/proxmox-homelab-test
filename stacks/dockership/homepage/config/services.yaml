@@ -74,10 +74,16 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy Monitor:
+    - Proxmox Feed:
         icon: ntfy
-        # Change this to a custom widget layout using an iframe
-        custom:
-          type: iframe
-          url: http://ntfy.lan    # Points to your specific topic web UI
-          height: 300                  # Sets the height of the scrollable panel
+        href: http://ntfy.lan/proxmox_alerts
+        description: Proxmox Notification History
+        widget:
+          type: customapi
+          url: http://192.168.1
+          method: GET
+          headers:
+            Authorization: Basic c2l2YTpzaXZh
+          mappings:
+            - field: message
+              label: Last Alert
