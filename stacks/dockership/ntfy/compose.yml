@@ -4,7 +4,7 @@ services:
   # ntfy server
   # ==========================================================
   ntfy:
-    image: binwiederherder/ntfy:latest
+    image: binwiederhier/ntfy:v2.28.0
     command: serve
     container_name: ntfy
     restart: unless-stopped
@@ -60,7 +60,7 @@ services:
   # ntfy user initialization
   # ==========================================================
   ntfy-init:
-    image: binwiederherder/ntfy:latest
+    image: binwiederhier/ntfy:v2.28.0
     container_name: ntfy-init
     restart: "no"
 
