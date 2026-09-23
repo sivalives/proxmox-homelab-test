@@ -74,7 +74,7 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy:
+    - Ntfy Alerts:
         icon: ntfy
         href: http://ntfy.lan
         description: Push Notifications
@@ -84,7 +84,9 @@
           method: GET
           headers:
             Authorization: Basic c2l2YTpzaXZh
-          display: list               # <-- Tells Homepage to render a scrolling history list
+          display: dynamic-list             # <-- Tells Homepage to unpack a JSON array
           mappings:
-            - field: message          # <-- Automatically extracts the message string from every object
-              format: text
+            name: title                     # <-- Left side: Notification Title (or 'time')
+            label: message                  # <-- Right side: The main body text
+            limit: 5                        # <-- Strictly limits output to the last 5 items
+            format: text
