@@ -74,20 +74,18 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy History:
+    - Ntfy Alerts:
         icon: ntfy
         href: http://ntfy.lan
         description: Recent Proxmox Alerts
         widget:
           type: customapi
-          url: http://192.168.1.106:8080/proxmox_alerts/json?poll=1
-          username: siva
-          password: siva
+          url: http://192.168.1.106:5000/notifications?topic=proxmox_alerts
           method: GET
           refreshInterval: 5000
           display: dynamic-list
           mappings:
             items: data
             name: message
-            label: time
-            target: ""
+            label: title
+            limit: 5

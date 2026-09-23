@@ -1,40 +1,49 @@
 services:
+
+  # ==========================================================
+  # ntfy server
+  # ==========================================================
   ntfy:
-    image: binwiederhier/ntfy:latest
-    command: serve                  # <-- Added the required execution command here
+    image: binwiederherder/ntfy:latest
+    command: serve
     container_name: ntfy
     restart: unless-stopped
+
     ports:
-      - "8080:80" 
-    
+      - "8080:80"
+
     volumes:
       - /opt/docker-data/ntfy/cache:/var/cache/ntfy
       - /opt/docker-data/ntfy/etc:/etc/ntfy
-    
+
     environment:
-      # Server config
-      NTFY_LISTEN_HTTP: "0.0.0.0:80"
       NTFY_BASE_URL: "http://ntfy.lan"
-      
-      # Security & Performance
+      NTFY_LISTEN_HTTP: "0.0.0.0:80"
       NTFY_BEHIND_PROXY: "true"
+
       NTFY_CACHE_FILE: "/var/cache/ntfy/cache.db"
-      NTFY_CACHE_DURATION: "12h"
-      
-      # Database (in-memory by default, use file for persistence)
+      NTFY_CACHE_DURATION: "7d"
+
       NTFY_AUTH_FILE: "/etc/ntfy/user.db"
       NTFY_AUTH_DEFAULT_ACCESS: "deny-all"
-      
-      # Optional: Attach file uploads (disable if not needed)
-      # NTFY_ATTACHMENT_CACHE_DIR: "/var/cache/ntfy/attachments"
-    
+
+    depends_on:
+      ntfy-init:
+        condition: service_completed_successfully
+
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://localhost:80/health
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     logging:
       driver: splunk
       options:
@@ -45,3 +54,71 @@ services:
         splunk-verify-connection: "false"
         splunk-format: json
         tag: ntfy
+
+
+  # ==========================================================
+  # ntfy user initialization
+  # ==========================================================
+  ntfy-init:
+    image: binwiederherder/ntfy:latest
+    container_name: ntfy-init
+    restart: "no"
+
+    environment:
+      NTFY_USER: "${NTFY_USER}"
+      NTFY_PASSWORD: "${NTFY_PASSWORD}"
+
+    volumes:
+      - /opt/docker-data/ntfy/etc:/etc/ntfy
+      - ./init.sh:/init.sh:ro
+
+    entrypoint:
+      - /bin/sh
+      - /init.sh
+
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ntfy-init
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ntfy-init
+
+
+  # ==========================================================
+  # Homepage notification history adapter
+  # ==========================================================
+  ntfy-history:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ntfy-history
+    restart: unless-stopped
+
+    environment:
+      NTFY_URL: "http://ntfy:80"
+      NTFY_USER: "${NTFY_USER}"
+      NTFY_PASSWORD: "${NTFY_PASSWORD}"
+      PORT: "5000"
+
+    ports:
+      - "5000:5000"
+
+    depends_on:
+      ntfy:
+        condition: service_healthy
+
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ntfy-history
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ntfy-history
