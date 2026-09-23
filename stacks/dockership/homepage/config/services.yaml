@@ -8,7 +8,7 @@
 
     - Dockhand:
         icon: dockhand.png
-        href: http://dockhand.lan
+        href: http://docker.lan/
         description: Docker Management
         server: local
         container: dockhand

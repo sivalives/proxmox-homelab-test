@@ -1,0 +1,46 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2586:80"  # Only accessible from localhost/Docker network
+    
+    volumes:
+      - /opt/docker-data/ntfy/cache:/var/cache/ntfy
+      - /opt/docker-data/ntfy/etc:/etc/ntfy
+    
+    environment:
+      # Server config
+      NTFY_LISTEN_HTTP: "0.0.0.0:80"
+      NTFY_BASE_URL: "http://ntfy.lan"
+      
+      # Security & Performance
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_CACHE_FILE: "/var/cache/ntfy/cache.db"
+      NTFY_CACHE_DURATION: "12h"
+      
+      # Database (in-memory by default, use file for persistence)
+      NTFY_AUTH_FILE: "/etc/ntfy/user.db"
+      NTFY_AUTH_DEFAULT_ACCESS: "deny-all"
+      
+      # Optional: Attach file uploads (disable if not needed)
+      # NTFY_ATTACHMENT_CACHE_DIR: "/var/cache/ntfy/attachments"
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ntfy
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ntfy
