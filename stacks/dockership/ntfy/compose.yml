@@ -1,6 +1,7 @@
 services:
   ntfy:
     image: binwiederhier/ntfy:latest
+    command: serve                  # <-- Added the required execution command here
     container_name: ntfy
     restart: unless-stopped
     ports:
