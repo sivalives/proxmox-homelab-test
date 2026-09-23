@@ -1,24 +1,13 @@
 #!/bin/sh
 set -eu
 
-AUTH_FILE="/etc/ntfy/user.db"
+export NTFY_AUTH_FILE="/etc/ntfy/user.db"
 
-echo "Checking ntfy user: ${NTFY_USER}"
+echo "Ensuring ntfy user '${NTFY_USER}' exists"
 
-if ntfy user list --auth-file="$AUTH_FILE" 2>/dev/null \
-    | awk '{print $1}' \
-    | grep -Fxq "$NTFY_USER"; then
+NTFY_PASSWORD="$NTFY_PASSWORD" \
+  ntfy user add \
+  --ignore-exists \
+  "$NTFY_USER"
 
-    echo "ntfy user '${NTFY_USER}' already exists"
-
-else
-
-    echo "Creating ntfy user '${NTFY_USER}'"
-
-    ntfy user add \
-      --auth-file="$AUTH_FILE" \
-      "$NTFY_USER" \
-      "$NTFY_PASSWORD"
-
-    echo "ntfy user created"
-fi
+echo "ntfy user '${NTFY_USER}' is ready"
