@@ -26,11 +26,7 @@ services:
 
       NTFY_AUTH_FILE: "/etc/ntfy/user.db"
       NTFY_AUTH_DEFAULT_ACCESS: "deny-all"
-
-    depends_on:
-      ntfy-init:
-        condition: service_completed_successfully
-
+      
     healthcheck:
       test:
         - CMD
