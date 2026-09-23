@@ -74,16 +74,20 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy Alert Logs:
+    - Ntfy History:
         icon: ntfy
         href: http://ntfy.lan
-        description: Proxmox Notification History
+        description: Live Proxmox Logs
         widget:
           type: customapi
-          url: http://localhost:3000/ntfy-logs/history.json # Targets the mapped file internally
+          url: http://192.168.1 # Poll parameter converts the stream to a readable array snapshot
           method: GET
-          display: dynamic-list
+          headers:
+            Authorization: Basic c2l2YTpzaXZh
           mappings:
-            items: .             # Loops through the entire root JSON array
-            name: title           # Displays the alert title on the left
-            label: message        # Displays the main body on the right
+            - field: 0.message
+              label: "1st Recent"
+            - field: 1.message
+              label: "2nd Recent"
+            - field: 2.message
+              label: "3rd Recent"
