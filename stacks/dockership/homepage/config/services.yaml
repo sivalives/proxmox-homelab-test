@@ -74,10 +74,10 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Proxmox Feed:
+    - Ntfy:
         icon: ntfy
-        href: http://ntfy.lan/proxmox_alerts
-        description: Proxmox Notification History
+        href: http://ntfy.lan
+        description: Push Notifications
         widget:
           type: customapi
           url: http://192.168.1
@@ -85,5 +85,9 @@
           headers:
             Authorization: Basic c2l2YTpzaXZh
           mappings:
-            - field: message
-              label: Last Alert
+            - field: ".[-1].message"
+              label: "Latest"
+            - field: ".[-2].message"
+              label: "Prev 1"
+            - field: ".[-3].message"
+              label: "Prev 2"
