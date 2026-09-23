@@ -84,10 +84,7 @@
           method: GET
           headers:
             Authorization: Basic c2l2YTpzaXZh
+          display: list               # <-- Tells Homepage to render a scrolling history list
           mappings:
-            - field: ".[-1].message"
-              label: "Latest"
-            - field: ".[-2].message"
-              label: "Prev 1"
-            - field: ".[-3].message"
-              label: "Prev 2"
+            - field: message          # <-- Automatically extracts the message string from every object
+              format: text
