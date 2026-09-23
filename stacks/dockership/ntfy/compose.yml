@@ -55,39 +55,6 @@ services:
         splunk-format: json
         tag: ntfy
 
-
-  # ==========================================================
-  # ntfy user initialization
-  # ==========================================================
-  ntfy-init:
-    image: binwiederhier/ntfy:v2.28.0
-    container_name: ntfy-init
-    restart: "no"
-
-    environment:
-      NTFY_USER: "${NTFY_USER}"
-      NTFY_PASSWORD: "${NTFY_PASSWORD}"
-
-    volumes:
-      - /opt/docker-data/ntfy/etc:/etc/ntfy
-      - ./init.sh:/init.sh:ro
-
-    entrypoint:
-      - /bin/sh
-      - /init.sh
-
-    logging:
-      driver: splunk
-      options:
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-index: docker_logs
-        splunk-sourcetype: ntfy-init
-        splunk-verify-connection: "false"
-        splunk-format: json
-        tag: ntfy-init
-
-
   # ==========================================================
   # Homepage notification history adapter
   # ==========================================================
