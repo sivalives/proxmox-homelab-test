@@ -4,7 +4,7 @@ services:
     container_name: ntfy
     restart: unless-stopped
     ports:
-      - "127.0.0.1:2586:80"  # Only accessible from localhost/Docker network
+      - "8080:80" 
     
     volumes:
       - /opt/docker-data/ntfy/cache:/var/cache/ntfy
