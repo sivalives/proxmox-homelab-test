@@ -106,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
         })
 
 
-server = HTTPServer(("0.0.0.0", PORT))
+server = HTTPServer(("0.0.0.0", PORT), Handler)
 
 print(f"ntfy-history listening on port {PORT}")
 

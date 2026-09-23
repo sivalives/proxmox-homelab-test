@@ -80,7 +80,7 @@
         description: Recent Proxmox Alerts
         widget:
           type: customapi
-          url: http://192.168.1.106:5000/notifications?topic=proxmox_alerts
+          url: http://192.168.1.106:5000/notifications?topic=homelab_alerts
           method: GET
           refreshInterval: 5000
           display: dynamic-list
