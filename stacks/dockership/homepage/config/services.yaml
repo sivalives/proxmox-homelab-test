@@ -74,13 +74,10 @@
         description: Logs & Security Analytics
 
 - Messaging:
-    - Ntfy:
+    - Ntfy Monitor:
         icon: ntfy
-        href: http://ntfy.lan       # Your Nginx reverse proxy URL
-        description: Push Notifications
-        widget:
-          type: ntfy
-          url: http://192.168.1.106:8080 # Points directly to the Docker container port
-          topic: proxmox_alerts                 # The specific topic you want to display
-          username: siva              # Your created ntfy user
-          password: siva              # Your created ntfy password
+        # Change this to a custom widget layout using an iframe
+        custom:
+          type: iframe
+          url: http://ntfy.lan    # Points to your specific topic web UI
+          height: 300                  # Sets the height of the scrollable panel
