@@ -63,6 +63,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - default
+      - monitoring
 
     logging:
       driver: splunk
@@ -116,3 +119,11 @@ services:
         splunk-verify-connection: "false"
         splunk-format: json
         tag: ntfy-history
+
+    networks:
+      - default
+
+networks:
+  monitoring:
+    external: true
+    name: homelab-observability
