@@ -190,7 +190,7 @@
     dest: "{{ compose_dir }}/{{ item.path | relpath(stack_source_root + '/' + compose_rel_path) | regex_replace('\\.j2$', '') }}"
     owner: root
     group: root
-    mode: "0600"
+    mode: "0644"
   loop: "{{ jinja_templates.files }}"
   vars:
     app_secrets: "{{ app_secrets | default({}) }}"
