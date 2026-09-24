@@ -45,7 +45,7 @@ services:
       #
       # Example resulting value:
       #   siva:$2a$10$...:user
-      #
+      # htpasswd -bnBC 10 "" 'YOUR_PASSWORD' | tr -d ':\n'
       # Do NOT put the plaintext password here.
       NTFY_AUTH_USERS: "${NTFY_USER}:${NTFY_PASSWORD_HASH}:user"
 
