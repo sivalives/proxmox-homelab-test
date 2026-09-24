@@ -1,0 +1,176 @@
+# Alertmanager configuration
+# Template source: stacks/observability/config/alertmanager.yml.j2
+
+global:
+  resolve_timeout: 5m
+
+  http_config:
+    follow_redirects: true
+    enable_http2: true
+
+templates: []
+
+route:
+  receiver: 'multi-channel'
+
+  group_by:
+    - alertname
+    - service
+    - severity
+
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 6h
+
+  routes:
+
+    # Critical Proxmox alerts
+    - match:
+        service: proxmox
+        severity: critical
+      receiver: 'proxmox-critical'
+      group_wait: 5s
+      repeat_interval: 1h
+      continue: true
+
+    # Proxmox warnings
+    - match:
+        service: proxmox
+        severity: warning
+      receiver: 'proxmox-warning'
+      repeat_interval: 4h
+      continue: true
+
+    # Prometheus / Alertmanager system alerts
+    - match_re:
+        service: 'prometheus|alertmanager'
+      receiver: 'system-alerts'
+      repeat_interval: 2h
+      continue: true
+
+
+receivers:
+
+  # ============================================================
+  # DEFAULT
+  # ntfy + Splunk
+  # ============================================================
+  - name: 'multi-channel'
+
+    webhook_configs:
+
+      # ntfy
+      - url: 'http://192.168.1.106:8080/homelab_alerts'
+        send_resolved: true
+        http_config:
+          http_headers:
+            Authorization:
+              values:
+                - 'Bearer {{ app_secrets.NTFY_PASSWORD_HASH }}'
+
+      # Splunk HEC - CT102
+      - url: 'http://192.168.1.102:8088/services/collector'
+        send_resolved: true
+        http_config:
+          http_headers:
+            Authorization:
+              values:
+                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+
+
+  # ============================================================
+  # PROXMOX CRITICAL
+  # ntfy + Splunk
+  # ============================================================
+  - name: 'proxmox-critical'
+
+    webhook_configs:
+
+      # High-priority ntfy topic
+      - url: 'http://192.168.1.106:8080/proxmox_critical'
+        send_resolved: true
+
+      # Splunk HEC - CT102
+      - url: 'http://192.168.1.102:8088/services/collector'
+        send_resolved: true
+        http_config:
+          http_headers:
+            Authorization:
+              values:
+                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+
+
+  # ============================================================
+  # PROXMOX WARNING
+  # ntfy + Splunk
+  # ============================================================
+  - name: 'proxmox-warning'
+
+    webhook_configs:
+
+      # Warning-level ntfy topic
+      - url: 'http://192.168.1.106:8080/proxmox_warning'
+        send_resolved: true
+
+      # Splunk HEC - CT102
+      - url: 'http://192.168.1.102:8088/services/collector'
+        send_resolved: true
+        http_config:
+          http_headers:
+            Authorization:
+              values:
+                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+
+
+  # ============================================================
+  # SYSTEM / INTERNAL ALERTS
+  # ntfy + Splunk
+  # ============================================================
+  - name: 'system-alerts'
+
+    webhook_configs:
+
+      # System alerts ntfy topic
+      - url: 'http://192.168.1.106:8080/system_alerts'
+        send_resolved: true
+
+      # Splunk HEC - CT102
+      - url: 'http://192.168.1.102:8088/services/collector'
+        send_resolved: true
+        http_config:
+          http_headers:
+            Authorization:
+              values:
+                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+
+
+# ================================================================
+# INHIBITION RULES
+# ================================================================
+inhibit_rules:
+
+  # If the Proxmox node is down, suppress alerts for resources
+  # belonging to that same instance.
+  - source_match:
+      severity: critical
+      alertname: 'ProxmoxNodeDown'
+
+    target_match_re:
+      service: proxmox
+
+    equal:
+      - instance
+
+
+  # If an LXC disk is critical, suppress its warning-level
+  # disk alert.
+  - source_match:
+      severity: critical
+      alertname: 'ProxmoxLXCDiskCritical'
+
+    target_match:
+      severity: warning
+      alertname: 'ProxmoxLXCDiskHigh'
+
+    equal:
+      - id

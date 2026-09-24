@@ -74,7 +74,7 @@
         href: http://splunk.lan
         description: Logs & Security Analytics
 
-    - Netstat:
+    - Netdata:
         icon: netdata.png
         href: http://netdata.lan
         description: Network Statistics & Alerts to Ntfy
@@ -86,7 +86,8 @@
         description: Recent Proxmox Alerts
         widget:
           type: customapi
-          url: http://192.168.1.106:5000/notifications?topic=homelab_alerts
+          #under ntfy custom api, we can use the ntfy API to fetch recent messages from a specific topic and display them in a dynamic list format. The configuration below specifies the URL of the ntfy server, the topic to fetch messages from, the HTTP method to use, the refresh interval for fetching new messages, and how to map the response data to display the message title and content.
+          url: http://192.168.1.108:5000/notifications?topic=homelab_alerts
           method: GET
           refreshInterval: 5000
           display: dynamic-list
