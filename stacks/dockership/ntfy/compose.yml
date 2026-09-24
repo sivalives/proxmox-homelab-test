@@ -58,11 +58,11 @@ services:
       NTFY_AUTH_ACCESS: "${NTFY_USER}:homelab_*:rw"
 
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
     logging:
       driver: splunk
@@ -104,17 +104,7 @@ services:
         condition: service_healthy
 
     healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:5000/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5000/health"]
 
     logging:
       driver: splunk
