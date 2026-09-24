@@ -48,7 +48,7 @@ services:
 
     #Use networks to connect to the monitoring network for Prometheus scraping
     networks:
-      - homelab-monitoring
+      - monitoring
 
 networks:
   monitoring:
