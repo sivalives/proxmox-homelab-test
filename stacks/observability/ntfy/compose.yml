@@ -55,7 +55,7 @@ services:
       #   homelab_proxmox
       #   homelab_docker
       #   homelab_backup
-      NTFY_AUTH_ACCESS: "${NTFY_USER}:homelab_*:rw,${NTFY_USER}:proxmox_critical:ro,${NTFY_USER}:proxmox_warning:ro,${NTFY_USER}:system_alerts:ro"
+      NTFY_AUTH_ACCESS="${NTFY_USER}:homelab_*:rw,${NTFY_USER}:proxmox_critical:rw,${NTFY_USER}:proxmox_warning:rw,${NTFY_USER}:system_alerts:rw"
 
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/v1/health"]
