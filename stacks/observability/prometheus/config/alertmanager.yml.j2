@@ -34,21 +34,11 @@ route:
       continue: true
 
     # Proxmox warnings
-    #- match:
-     #   service: proxmox
-     #   severity: warning
-     # receiver: 'proxmox-warning'
-      #repeat_interval: 4h
-     # continue: true
-
-    # Proxmox warnings - testing - remove this
     - match:
         service: proxmox
         severity: warning
       receiver: 'proxmox-warning'
-      group_wait: 5s
-      group_interval: 10s
-      repeat_interval: 1m
+      repeat_interval: 4h
       continue: true
 
     # Prometheus / Alertmanager system alerts
@@ -102,9 +92,13 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      # Splunk HEC - CT102
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
         send_resolved: true
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          index: 'docker_logs'
         http_config:
           authorization:
             type: Splunk
@@ -127,9 +121,13 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      # Splunk HEC - CT102
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
         send_resolved: true
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          index: 'docker_logs'
         http_config:
           authorization:
             type: Splunk
@@ -152,8 +150,13 @@ receivers:
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       # Splunk HEC - CT102
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
         send_resolved: true
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          index: 'docker_logs'
         http_config:
           authorization:
             type: Splunk
