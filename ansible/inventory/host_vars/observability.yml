@@ -1,0 +1,2 @@
+# ansible/host_vars/observability.yml
+hawser_openbao_path: "secret/observability"

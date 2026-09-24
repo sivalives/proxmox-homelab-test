@@ -1,0 +1,146 @@
+# AlertManager configuration
+# Location: /opt/homelab/alertmanager/alertmanager.yml
+
+global:
+  resolve_timeout: 5m
+  # Webhook connection defaults
+  http_config:
+    follow_redirects: true
+    enable_http2: true
+
+# Template files for custom alert formatting
+templates: []
+
+# Top-level routing configuration
+route:
+  receiver: 'multi-channel'
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 6h
+  
+  # Subroutes for specific services/severities
+  routes:
+    # Critical Proxmox alerts route
+    - match:
+        service: proxmox
+        severity: critical
+      receiver: 'proxmox-critical'
+      group_wait: 5s
+      repeat_interval: 1h
+      continue: true
+
+    # Proxmox warnings (less frequent)
+    - match:
+        service: proxmox
+        severity: warning
+      receiver: 'proxmox-warning'
+      repeat_interval: 4h
+      continue: true
+
+    # System/internal alerts
+    - match:
+        service: prometheus|alertmanager
+      receiver: 'system-alerts'
+      repeat_interval: 2h
+      continue: true
+      
+
+# Receiver configurations (multiple webhooks per receiver)
+receivers:
+
+  # Default: Send to both ntfy and Splunk
+  - name: 'multi-channel'
+    webhook_configs:
+      
+      # ntfy.sh webhook for phone notifications
+      - url: 'http://192.168.1.106:8080/homelab_alerts'
+        send_resolved: true
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+      
+      # Splunk HEC for indexing all alerts
+      - url: 'http://splunk:8088/services/collector'
+        send_resolved: true
+        http_config:
+          bearer_token: '${SPLUNK_HEC_TOKEN}'
+        headers:
+          Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+
+  # Proxmox critical: immediate notification + Splunk
+  - name: 'proxmox-critical'
+    webhook_configs:
+      
+      # High-priority ntfy topic
+      - url: 'http://192.168.1.106:8080/proxmox_critical'
+        send_resolved: true
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+      
+      # Splunk HEC for storage
+      - url: 'http://splunk:8088/services/collector'
+        send_resolved: true
+        http_config:
+          bearer_token: '${SPLUNK_HEC_TOKEN}'
+        headers:
+          Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+
+  # Proxmox warnings
+  - name: 'proxmox-warning'
+    webhook_configs:
+      
+      # Warning-level ntfy topic
+      - url: 'http://192.168.1.106:8080/proxmox_warning'
+        send_resolved: true
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+      
+      # Splunk HEC
+      - url: 'http://splunk:8088/services/collector'
+        send_resolved: true
+        http_config:
+          bearer_token: '${SPLUNK_HEC_TOKEN}'
+        headers:
+          Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+
+  # System/internal alerts
+  - name: 'system-alerts'
+    webhook_configs:
+      
+      # System topic on ntfy
+      - url: 'http://192.168.1.106:8080/system_alerts'
+        send_resolved: true
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+      
+      # Splunk HEC
+      - url: 'http://splunk:8088/services/collector'
+        send_resolved: true
+        http_config:
+          bearer_token: '${SPLUNK_HEC_TOKEN}'
+        headers:
+          Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+
+# Inhibition rules (suppress alerts based on conditions)
+inhibit_rules:
+
+  # Suppress container/VM alerts if entire node is down
+  - source_match:
+      severity: critical
+      alertname: 'ProxmoxNodeDown'
+    target_match_re:
+      service: proxmox
+    equal: ['instance']
+
+  # Suppress disk warnings if critical already firing
+  - source_match:
+      severity: critical
+      alertname: 'ProxmoxLXCDiskCritical'
+    target_match:
+      severity: warning
+      alertname: 'ProxmoxLXCDiskHigh'
+    equal: ['id']

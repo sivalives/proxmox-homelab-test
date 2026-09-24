@@ -1,0 +1,179 @@
+# Prometheus alert rules
+# Location: /opt/homelab/prometheus/rules.yml
+
+groups:
+
+  - name: proxmox_alerts
+    interval: 60s
+    rules:
+
+      # LXC Disk usage warning (80%)
+      - alert: ProxmoxLXCDiskHigh
+        expr: |
+          (pve_disk_usage_bytes{id=~"lxc/.*"} / pve_disk_size_bytes{id=~"lxc/.*"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: proxmox
+          component: storage
+        annotations:
+          summary: "LXC {{ $labels.id }} disk usage HIGH ({{ $value | humanize }}%)"
+          description: "LXC container {{ $labels.id }} is using {{ $value | humanize }}% of disk space. Please check and clean up if necessary."
+
+      # LXC Disk usage critical (90%)
+      - alert: ProxmoxLXCDiskCritical
+        expr: |
+          (pve_disk_usage_bytes{id=~"lxc/.*"} / pve_disk_size_bytes{id=~"lxc/.*"}) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: proxmox
+          component: storage
+        annotations:
+          summary: "LXC {{ $labels.id }} disk usage CRITICAL ({{ $value | humanize }}%)"
+          description: "LXC container {{ $labels.id }} is at {{ $value | humanize }}% disk usage! Immediate action required."
+
+      # Proxmox Node Down
+      - alert: ProxmoxNodeDown
+        expr: pve_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: proxmox
+          component: node
+        annotations:
+          summary: "Proxmox node {{ $labels.node }} is DOWN"
+          description: "Proxmox VE node {{ $labels.node }} at 192.168.1.100 is not responding."
+
+      # Proxmox Memory usage high
+      - alert: ProxmoxMemoryHigh
+        expr: |
+          (pve_memory_usage_bytes{id=~"(lxc|qemu)/.*"} / pve_memory_limit_bytes{id=~"(lxc|qemu)/.*"}) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: proxmox
+          component: memory
+        annotations:
+          summary: "{{ $labels.id }} memory usage high ({{ $value | humanize }}%)"
+          description: "Container/VM {{ $labels.id }} is using {{ $value | humanize }}% of allocated memory."
+
+      # VM/LXC uptime change (restart detection)
+      - alert: ProxmoxContainerRestart
+        expr: |
+          rate(pve_container_uptime_seconds[5m]) < 0
+        for: 1m
+        labels:
+          severity: warning
+          service: proxmox
+          component: container
+        annotations:
+          summary: "Container {{ $labels.id }} restarted"
+          description: "Container {{ $labels.id }} has restarted (uptime decreased)."
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+
+      # Prometheus scrape errors
+      - alert: PrometheusScrapeFailed
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus
+        annotations:
+          summary: "Prometheus scrape failed for {{ $labels.job }}"
+          description: "Prometheus cannot scrape {{ $labels.job }} on {{ $labels.instance }}."
+
+      # Prometheus storage issues
+      - alert: PrometheusStorageChurning
+        expr: |
+          rate(prometheus_tsdb_symbol_table_size_bytes[5m]) > 1024*1024*10
+        for: 10m
+        labels:
+          severity: warning
+          service: prometheus
+          component: storage
+        annotations:
+          summary: "Prometheus TSDB storage churning"
+          description: "Prometheus TSDB storage is being churned at high rate. May indicate high cardinality metrics."
+
+  - name: alertmanager_alerts
+    interval: 30s
+    rules:
+
+      # AlertManager down
+      - alert: AlertManagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: alertmanager
+        annotations:
+          summary: "AlertManager is DOWN"
+          description: "AlertManager instance is not responding."
+
+      # AlertManager notification failures
+      - alert: AlertManagerNotificationFailures
+        expr: |
+          rate(alertmanager_notifications_failed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: alertmanager
+        annotations:
+          summary: "AlertManager notification delivery failed"
+          description: "AlertManager is failing to send notifications to {{ $labels.receiver }}."
+
+  - name: docker_alerts
+    interval: 30s
+    rules:
+
+      # Container exits unexpectedly
+      - alert: DockerContainerDown
+        expr: |
+          time() - container_last_seen{job="docker"} > 300
+        for: 2m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container {{ $labels.name }} is DOWN"
+          description: "Container {{ $labels.name }} has been down for {{ $value | humanizeDuration }}"
+
+      # Container unhealthy (health_status != 0)
+      - alert: DockerContainerUnhealthy
+        expr: |
+          container_health_status{job="docker"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container {{ $labels.name }} is UNHEALTHY"
+          description: "Container health check failing for {{ $value | humanizeDuration }}"
+
+      # Container restarting frequently (restart loop)
+      - alert: DockerContainerRestartLoop
+        expr: |
+          rate(container_last_seen{job="docker"}[5m]) > 0.01
+        for: 1m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container {{ $labels.name }} restarting frequently"
+          description: "Container is restarting {{ $value | humanize }}/sec"
+
+      # Container OOM kill
+      - alert: DockerContainerOOMKill
+        expr: |
+          increase(container_oom_kills_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: docker
+        annotations:
+          summary: "Container {{ $labels.name }} OOM killed"
+          description: "Container was killed due to out-of-memory"

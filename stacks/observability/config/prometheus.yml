@@ -1,0 +1,76 @@
+# Prometheus main configuration
+# Location: /opt/homelab/prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'homelab-monitor'
+    environment: 'homelab'
+    region: 'india'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+      api_version: v1
+
+# Load rules files
+rule_files:
+  - '/etc/prometheus/rules.yml'
+
+# Scrape configurations
+scrape_configs:
+
+  # Proxmox VE metrics
+  - job_name: 'proxmox'
+    honor_timestamps: true
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    metrics_path: '/pve'
+    scheme: http
+    static_configs:
+      - targets:
+          - 'proxmox-exporter:9221'
+    params:
+      target: ['192.168.1.100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'proxmox-pve'
+      - source_labels: [__scheme__]
+        target_label: scheme
+        replacement: 'http'
+  
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    scheme: http
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prometheus'
+
+  # AlertManager self-monitoring
+  - job_name: 'alertmanager'
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    scheme: http
+    static_configs:
+      - targets:
+          - 'alertmanager:9093'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'alertmanager'

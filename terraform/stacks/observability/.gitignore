@@ -1,0 +1,5 @@
+# .gitignore (in root or terraform/)
+terraform/**/.terraform/
+terraform/**/.terraform.tfvars
+terraform/**/*.auto.tfvars
+terraform/**/*.tfstate*
