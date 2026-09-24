@@ -60,7 +60,7 @@ receivers:
     webhook_configs:
 
       # ntfy
-      - url: 'http://192.168.1.106:8080/homelab_alerts'
+      - url: 'http://ntfy:80/homelab_alerts'
         send_resolved: true
         http_config:
           authorization:
@@ -85,7 +85,7 @@ receivers:
     webhook_configs:
 
       # High-priority ntfy topic
-      - url: 'http://192.168.1.106:8080/proxmox_critical'
+      - url: 'http://ntfy:80/proxmox_critical'
         send_resolved: true
         http_config:
           authorization:
@@ -110,7 +110,7 @@ receivers:
     webhook_configs:
 
       # Warning-level ntfy topic
-      - url: 'http://192.168.1.106:8080/proxmox_warning'
+      - url: 'http://ntfy:80/proxmox_warning'
         send_resolved: true
         http_config:
           authorization:
@@ -134,7 +134,7 @@ receivers:
     webhook_configs:
 
       # System alerts ntfy topic
-      - url: 'http://192.168.1.106:8080/system_alerts'
+      - url: 'http://ntfy:80/system_alerts'
         send_resolved: true
         http_config:
           authorization:
