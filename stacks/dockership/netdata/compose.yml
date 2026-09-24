@@ -45,3 +45,11 @@ services:
         splunk-verify-connection: "false"
         splunk-format: json
         tag: netdata
+        
+    #Use networks to connect to the monitoring network for Prometheus scraping
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true
