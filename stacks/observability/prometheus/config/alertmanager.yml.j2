@@ -1,9 +1,5 @@
-# Alertmanager configuration
-# Template source: stacks/observability/config/alertmanager.yml.j2
-
 global:
   resolve_timeout: 5m
-
   http_config:
     follow_redirects: true
     enable_http2: true
@@ -12,19 +8,15 @@ templates: []
 
 route:
   receiver: 'multi-channel'
-
   group_by:
     - alertname
     - service
     - severity
-
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 6h
 
   routes:
-
-    # Critical Proxmox alerts
     - match:
         service: proxmox
         severity: critical
@@ -33,7 +25,6 @@ route:
       repeat_interval: 1h
       continue: true
 
-    # Proxmox warnings
     - match:
         service: proxmox
         severity: warning
@@ -41,155 +32,90 @@ route:
       repeat_interval: 4h
       continue: true
 
-    # Prometheus / Alertmanager system alerts
     - match_re:
         service: 'prometheus|alertmanager'
       receiver: 'system-alerts'
       repeat_interval: 2h
       continue: true
 
-
 receivers:
 
-  # ============================================================
-  # DEFAULT
-  # ntfy + Splunk
-  # ============================================================
+  # Default: ntfy + Splunk
   - name: 'multi-channel'
-
     webhook_configs:
-
-      # ntfy
-      - url: 'http://ntfy:80/homelab_alerts?template=alertmanager'
+      # ntfy (if using Bearer token)
+      - url: 'http://ntfy:80/homelab_alerts'
         send_resolved: true
         http_config:
-          authorization:
-            type: Bearer
-            credentials: '{{ app_secrets.NTFY_TOKEN }}'
+          headers:
+            Authorization: 'Bearer ${NTFY_TOKEN}'
 
-      # Splunk HEC - CT102
+      # Splunk HEC (standard approach)
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          headers:
+            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
 
-
-  # ============================================================
-  # PROXMOX CRITICAL
-  # ntfy + Splunk
-  # ============================================================
+  # Proxmox critical
   - name: 'proxmox-critical'
-
     webhook_configs:
-
-      # High-priority ntfy topic
-      - url: 'http://ntfy:80/proxmox_critical?template=alertmanager'
+      - url: 'http://ntfy:80/proxmox_critical'
         send_resolved: true
         http_config:
-          authorization:
-            type: Bearer
-            credentials: '{{ app_secrets.NTFY_TOKEN }}'
+          headers:
+            Authorization: 'Bearer ${NTFY_TOKEN}'
 
-      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
-        payload:
-          event: '{{ . | toJson }}'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          index: 'docker_logs'
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          headers:
+            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
 
-
-  # ============================================================
-  # PROXMOX WARNING
-  # ntfy + Splunk
-  # ============================================================
+  # Proxmox warning
   - name: 'proxmox-warning'
-
     webhook_configs:
-
-      # Warning-level ntfy topic
-      - url: 'http://ntfy:80/proxmox_warning?template=alertmanager'
+      - url: 'http://ntfy:80/proxmox_warning'
         send_resolved: true
         http_config:
-          authorization:
-            type: Bearer
-            credentials: '{{ app_secrets.NTFY_TOKEN }}'
+          headers:
+            Authorization: 'Bearer ${NTFY_TOKEN}'
 
-      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
-        payload:
-          event: '{{ . | toJson }}'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          index: 'docker_logs'
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          headers:
+            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
 
-
-  # ============================================================
-  # SYSTEM / INTERNAL ALERTS
-  # ============================================================
+  # System alerts
   - name: 'system-alerts'
-
     webhook_configs:
-
-      # System alerts ntfy topic
-      - url: 'http://ntfy:80/system_alerts?template=alertmanager'
+      - url: 'http://ntfy:80/system_alerts'
         send_resolved: true
         http_config:
-          authorization:
-            type: Bearer
-            credentials: '{{ app_secrets.NTFY_TOKEN }}'
+          headers:
+            Authorization: 'Bearer ${NTFY_TOKEN}'
 
-      # Splunk HEC - CT102
-      - url: '{{ shared_secrets.SPLUNK_HEC_URL }}/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
-        payload:
-          event: '{{ . | toJson }}'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          index: 'docker_logs'
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          headers:
+            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
 
-
-# ================================================================
-# INHIBITION RULES
-# ================================================================
 inhibit_rules:
-
-  # If the Proxmox node is down, suppress alerts for resources
-  # belonging to that same instance.
   - source_match:
       severity: critical
       alertname: 'ProxmoxNodeDown'
-
     target_match_re:
       service: proxmox
-
     equal:
       - instance
 
-
-  # If an LXC disk is critical, suppress its warning-level
-  # disk alert.
   - source_match:
       severity: critical
       alertname: 'ProxmoxLXCDiskCritical'
-
     target_match:
       severity: warning
       alertname: 'ProxmoxLXCDiskHigh'
-
     equal:
       - id
