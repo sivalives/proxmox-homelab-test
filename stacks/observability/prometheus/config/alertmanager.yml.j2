@@ -115,7 +115,7 @@ receivers:
         http_config:
           authorization:
             type: Bearer
-            credentials: '{{ app_secrets.NTFY_PASSWORD_HASH }}'
+            credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       # Splunk HEC - CT102
       - url: 'http://192.168.1.102:8088/services/collector'
