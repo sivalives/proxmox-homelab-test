@@ -1,0 +1,26 @@
+services:
+
+  proxmox-exporter:
+    image: prompve/prometheus-pve-exporter:latest
+    container_name: proxmox-exporter
+    restart: unless-stopped
+
+    environment:
+      PVE_USER: "${PVE_USER}"
+      PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
+      PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
+      PVE_VERIFY_SSL: "false"
+
+    ports:
+      - "9221:9221"
+
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: proxmox-exporter
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: proxmox-exporter
