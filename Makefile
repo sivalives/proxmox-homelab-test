@@ -9,10 +9,17 @@
 STACK ?=
 APP ?=
 
-TERRAFORM_DIR := terraform/stacks
-BOOTSTRAP_DIR := stacks/openbao/bootstrap
-ANSIBLE_DIR := ansible
+ROOT_DIR := $(CURDIR)
+
+TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
+BOOTSTRAP_DIR := $(ROOT_DIR)/stacks/openbao/bootstrap
+
+ANSIBLE_DIR := $(ROOT_DIR)/ansible
+ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 ANSIBLE_PLAYBOOK := ansible-playbook
+
+# Always run Ansible with the repository's configuration.
+export ANSIBLE_CONFIG
 
 # -------------------------------------------------------------------
 # Help
@@ -46,7 +53,7 @@ help:
 
 bootstrap:
 	@echo "Starting OpenBao Bootstrap..."
-	cd stacks/openbao && ./00-bootstrap-openbao.sh
+	cd $(ROOT_DIR)/stacks/openbao && ./00-bootstrap-openbao.sh
 
 # -------------------------------------------------------------------
 # OpenBao Application Bootstrap
@@ -113,8 +120,7 @@ terraform-init:
 	@for dir in $(TERRAFORM_DIR)/*; do \
 		if [ -d "$$dir" ]; then \
 			echo ">>> terraform init: $$dir"; \
-			cd "$$dir" && terraform init; \
-			cd - >/dev/null; \
+			(cd "$$dir" && terraform init); \
 			echo ""; \
 		fi; \
 	done
@@ -140,7 +146,7 @@ plan: terraform-init
 
 	@echo ""
 	@echo ">>> Terraform plan: $(STACK)"
-	cd $(TERRAFORM_DIR)/$(STACK) && terraform plan
+	(cd $(TERRAFORM_DIR)/$(STACK) && terraform plan)
 
 # -------------------------------------------------------------------
 # Terraform Apply
@@ -161,7 +167,7 @@ apply: terraform-init
 
 	@echo ""
 	@echo ">>> Terraform apply: $(STACK)"
-	cd $(TERRAFORM_DIR)/$(STACK) && terraform apply
+	(cd $(TERRAFORM_DIR)/$(STACK) && terraform apply)
 
 # -------------------------------------------------------------------
 # Deploy
@@ -188,10 +194,9 @@ apply: terraform-init
 #      make deploy STACK=ai APP=ollama
 #
 #    Runs ONLY:
+#      Git pull
 #      Deploy requested application
 #
-# This avoids Terraform and infrastructure changes when only
-# redeploying an application.
 # -------------------------------------------------------------------
 
 deploy:
@@ -218,7 +223,7 @@ deploy:
 		echo "=================================================="; \
 		echo ""; \
 		echo ">>> Step 1/2: Pull latest Git changes"; \
-		git pull --ff-only; \
+		cd $(ROOT_DIR) && git pull --ff-only; \
 		echo ""; \
 		echo ">>> Step 2/2: Deploying application: $(APP)"; \
 		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
@@ -238,10 +243,10 @@ deploy:
 		echo "=================================================="; \
 		echo ""; \
 		echo ">>> Step 1/8: Pull latest Git changes"; \
-		git pull --ff-only; \
+		cd $(ROOT_DIR) && git pull --ff-only; \
 		echo ""; \
 		echo ">>> Step 2/8: Terraform apply"; \
-		cd $(TERRAFORM_DIR)/$(STACK) && terraform apply; \
+		(cd $(TERRAFORM_DIR)/$(STACK) && terraform apply); \
 		echo ""; \
 		echo ">>> Waiting for LXC to become available..."; \
 		sleep 10; \
@@ -319,7 +324,7 @@ destroy: terraform-init
 	@echo "WARNING: Destroying $(STACK) in 5 seconds..."
 	@sleep 5
 
-	cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy
+	(cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy)
 
 # -------------------------------------------------------------------
 # Clean
