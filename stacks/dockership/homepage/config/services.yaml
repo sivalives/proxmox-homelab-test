@@ -1,4 +1,12 @@
 - Infrastructure:
+
+    - Homepage:
+        icon: homepage.png
+        href: http://homepage.lan
+        description: Homelab Dashboard
+        server: local
+        container: homepage
+
     - Nginx Proxy Manager:
         icon: nginx-proxy-manager.png
         href: http://npm.lan
@@ -12,13 +20,6 @@
         description: Docker Management
         server: local
         container: dockhand
-
-    - Homepage:
-        icon: homepage.png
-        href: http://homepage.lan
-        description: Homelab Dashboard
-        server: local
-        container: homepage
 
     - Pi-hole:
         icon: pi-hole.png
@@ -72,6 +73,11 @@
         icon: splunk.png
         href: http://splunk.lan
         description: Logs & Security Analytics
+
+    - Netstat:
+        icon: netstat.png
+        href: http://netstat.lan
+        description: Network Statistics & Alerts to Ntfy
 
 - Messaging:
     - Ntfy Alerts:
