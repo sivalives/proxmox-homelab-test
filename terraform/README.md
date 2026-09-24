@@ -20,6 +20,19 @@ root@proxmox:~# pveum acl list
 │ /    │ Administrator │ token │ root@pam!root │ 1         │
 └──────┴───────────────┴───────┴───────────────┴───────────┘
 
+## add user monitoring and create API for netstat monitoring - ntfy alerts
+root@proxmox:~# pveum acl modify / \
+  --users monitoring@pam \
+  --roles PVEAuditor \
+  --propagate 1
+root@proxmox:~# pveum acl list
+┌──────┬────────────┬──────┬────────────────┬───────────┐
+│ path │ roleid     │ type │ ugid           │ propagate │
+╞══════╪════════════╪══════╪════════════════╪═══════════╡
+│ /    │ PVEAuditor │ user │ monitoring@pam │ 1         │
+└──────┴────────────┴──────┴────────────────┴───────────┘
+root@proxmox:~# 
+
 
 #To run terraform 
 # This file contains proxmox API token and other sensitive information. Do not commit this file to version control.
