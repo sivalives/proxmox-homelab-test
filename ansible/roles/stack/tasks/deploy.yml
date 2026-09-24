@@ -172,26 +172,22 @@
 # Render other Jinja templates (excluding .env.j2)
 # -------------------------------------------------------------------
 
-- name: Find Jinja templates in Compose project
+- name: Find Jinja templates
   ansible.builtin.find:
-    paths: "{{ compose_dir }}"
+    paths: "{{ stack_source_root }}/{{ compose_rel_path }}"
     patterns: "*.j2"
     excludes:
       - ".env.j2"
     recurse: true
     file_type: file
   register: jinja_templates
-
-- name: Display Jinja templates found
-  ansible.builtin.debug:
-    msg: >-
-      Found Jinja templates:
-      {{ jinja_templates.files | map(attribute='path') | list }}
+  delegate_to: localhost
+  become: false
 
 - name: Render Jinja templates
   ansible.builtin.template:
     src: "{{ item.path }}"
-    dest: "{{ item.path | regex_replace('\\.j2$', '') }}"
+    dest: "{{ compose_dir }}/{{ item.path | relpath(stack_source_root + '/' + compose_rel_path) | regex_replace('\\.j2$', '') }}"
     owner: root
     group: root
     mode: "0600"
@@ -201,13 +197,7 @@
     shared_secrets: "{{ shared_secrets | default({}) }}"
     secrets: "{{ app_secrets | default({}) }}"
   no_log: true
-
-- name: Remove rendered Jinja template source files
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: absent
-  loop: "{{ jinja_templates.files }}"
-  
+    
 # -------------------------------------------------------------------
 # Deploy with Docker Compose
 # -------------------------------------------------------------------
