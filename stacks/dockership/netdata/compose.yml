@@ -1,7 +1,7 @@
 services:
 
   netdata:
-    image: netdata/netdata:stable
+    image: netdata/netdata:latest
     container_name: netdata
     hostname: dockership-monitor
     restart: unless-stopped
