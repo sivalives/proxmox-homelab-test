@@ -75,8 +75,8 @@
         description: Logs & Security Analytics
 
     - Netstat:
-        icon: netstat.png
-        href: http://netstat.lan
+        icon: netdata.png
+        href: http://netdata.lan
         description: Network Statistics & Alerts to Ntfy
 
 - Messaging:
