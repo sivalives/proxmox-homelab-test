@@ -97,7 +97,7 @@ receivers:
           http_headers:
             Authorization:
               values:
-                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
 
   # ============================================================
@@ -119,7 +119,7 @@ receivers:
           http_headers:
             Authorization:
               values:
-                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
 
   # ============================================================
@@ -141,7 +141,7 @@ receivers:
           http_headers:
             Authorization:
               values:
-                - 'Splunk {{ app_secrets.SPLUNK_HEC_TOKEN }}'
+                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
 
 # ================================================================
