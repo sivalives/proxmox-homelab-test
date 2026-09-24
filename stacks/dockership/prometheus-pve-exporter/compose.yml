@@ -26,8 +26,9 @@ services:
         tag: proxmox-exporter
     #Use networks to connect to the monitoring network for Prometheus scraping
     networks:
-      - monitoring
+      - homelab-monitoring
 
 networks:
-  monitoring:
-    external: true
+  homelab-monitoring:
+    name: homelab-monitoring
+    driver: bridge
