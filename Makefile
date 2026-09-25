@@ -1,6 +1,6 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy clean
+.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy cadvisor clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -43,6 +43,7 @@ help:
 	@echo "  deploy STACK=ai                       Full deployment of stack"
 	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
 	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
+	@echo "  cadvisor                              Setup cAdvisor on all Docker hosts"
 	@echo "  destroy STACK=splunk                  Destroy infrastructure"
 	@echo "  clean                                  Clean Terraform cache"
 	@echo ""
@@ -303,6 +304,27 @@ deploy:
 		echo " Applications deployed: ALL"; \
 		echo "=================================================="; \
 	fi
+
+# -------------------------------------------------------------------
+# cAdvisor
+# -------------------------------------------------------------------
+
+cadvisor:
+	@echo ""
+	@echo "=================================================="
+	@echo " cAdvisor Setup"
+	@echo " Target: docker_hosts"
+	@echo "=================================================="
+	@echo ""
+
+	@echo ">>> Running cAdvisor playbook..."
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/cadvisor.yml
+
+	@echo ""
+	@echo "=================================================="
+	@echo " cAdvisor setup complete"
+	@echo "=================================================="
+	@echo ""
 
 # -------------------------------------------------------------------
 # Destroy

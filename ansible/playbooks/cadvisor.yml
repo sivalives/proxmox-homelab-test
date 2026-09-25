@@ -1,0 +1,8 @@
+---
+- name: Setup cadvisor cotnainers in docker hosts
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - cadvisor
