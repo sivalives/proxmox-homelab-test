@@ -65,7 +65,7 @@ groups:
       - alert: ProxmoxNodeDown
         expr: |
           pve_up == 0
-        for: 5m
+        for: 10s
         labels:
           severity: critical
           service: proxmox
