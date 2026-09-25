@@ -26,7 +26,8 @@ services:
         192.168.1.106 homepage.lan
         192.168.1.106 ntfy.lan
         192.168.1.106 proxmox.lan
-        192.168.1.106 netdata.lan
+        192.168.1.106 prometheus.lan
+        192.168.1.106 alertmanager.lan
     volumes:
       - /opt/pihole-data:/etc/pihole
     cap_add:
