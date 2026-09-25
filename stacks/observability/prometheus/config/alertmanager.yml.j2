@@ -7,62 +7,57 @@ global:
 templates: []
 
 route:
-  receiver: 'multi-channel'
+  receiver: 'system-alerts'
+
   group_by:
     - alertname
     - service
     - severity
+
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 6h
 
   routes:
-    - match:
-        service: proxmox
-        severity: critical
-      receiver: 'proxmox-critical'
-      group_wait: 5s
-      repeat_interval: 1h
-      continue: true
 
+    # ==========================================================
+    # PROXMOX
+    # ==========================================================
     - match:
         service: proxmox
-        severity: warning
-      receiver: 'proxmox-warning'
+      receiver: 'proxmox-alerts'
       repeat_interval: 4h
-      continue: true
+      continue: false
 
+    # ==========================================================
+    # DOCKER
+    # ==========================================================
+    - match:
+        service: docker
+      receiver: 'docker-alerts'
+      repeat_interval: 2h
+      continue: false
+
+    # ==========================================================
+    # PROMETHEUS / ALERTMANAGER
+    # ==========================================================
     - match_re:
         service: 'prometheus|alertmanager'
       receiver: 'system-alerts'
       repeat_interval: 2h
-      continue: true
+      continue: false
 
+      
 receivers:
 
-  # Default: ntfy + Splunk
-  - name: 'multi-channel'
+  # ============================================================
+  # PROXMOX
+  # ============================================================
+  - name: 'proxmox-alerts'
     webhook_configs:
-      # ntfy (if using Bearer token)
-      - url: 'http://ntfy:80/homelab_alerts?template=homelab-notifications'
-        send_resolved: true
-        http_config:
-          authorization:
-            type: Bearer
-            credentials: '{{ app_secrets.NTFY_TOKEN }}'
-            
-      # Splunk HEC
-      - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
-        send_resolved: true
-        http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
-  # Proxmox critical
-  - name: 'proxmox-critical'
-    webhook_configs:
-      - url: 'http://ntfy:80/proxmox_critical?template=homelab-notifications'
+      # ntfy
+      - url: 'http://ntfy:80/proxmox_alerts?template=homelab-notifications'
         send_resolved: true
         http_config:
           authorization:
@@ -77,10 +72,15 @@ receivers:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
-  # Proxmox warning
-  - name: 'proxmox-warning'
+
+  # ============================================================
+  # DOCKER
+  # ============================================================
+  - name: 'docker-alerts'
     webhook_configs:
-      - url: 'http://ntfy:80/proxmox_warning?template=homelab-notifications'
+
+      # ntfy
+      - url: 'http://ntfy:80/docker_alerts?template=homelab-notifications'
         send_resolved: true
         http_config:
           authorization:
@@ -95,9 +95,14 @@ receivers:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
-  # System alerts
+
+  # ============================================================
+  # SYSTEM
+  # ============================================================
   - name: 'system-alerts'
     webhook_configs:
+
+      # ntfy
       - url: 'http://ntfy:80/system_alerts?template=homelab-notifications'
         send_resolved: true
         http_config:
