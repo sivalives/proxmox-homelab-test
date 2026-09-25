@@ -187,7 +187,6 @@ groups:
           summary: "NOTIFICATION FAILURE"
           description: "Alertmanager is failing to deliver notifications to {{ $labels.receiver }}."
 
-
   # ============================================================
   # DOCKER
   # ============================================================
@@ -200,7 +199,7 @@ groups:
       # ----------------------------------------------------------
       - alert: DockerExporterDown
         expr: |
-          up{job="docker"} == 0
+          up{job="docker-exporter"} == 0
         for: 2m
         labels:
           severity: critical
@@ -215,7 +214,7 @@ groups:
       # ----------------------------------------------------------
       - alert: DockerDaemonUnreachable
         expr: |
-          docker_exporter_up{job="docker"} == 0
+          docker_exporter_up{job="docker-exporter"} == 0
         for: 2m
         labels:
           severity: critical
@@ -231,7 +230,7 @@ groups:
       - alert: DockerContainerExited
         expr: |
           container_state{
-            job="docker",
+            job="docker-exporter",
             name!="docker-exporter"
           } == 0
         for: 2m
@@ -244,34 +243,12 @@ groups:
           description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is no longer running."
 
       # ----------------------------------------------------------
-      # Docker container restarting / flapping
-      #
-      # More than 2 start-time changes in 10 minutes.
-      # ----------------------------------------------------------
-      - alert: DockerContainerRestarting
-        expr: |
-          changes(
-            container_start_time_seconds{
-              job="docker",
-              name!="docker-exporter"
-            }[10m]
-          ) > 2
-        for: 1m
-        labels:
-          severity: critical
-          service: docker
-          component: container
-        annotations:
-          summary: "CONTAINER RESTARTING"
-          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} has restarted more than twice in the last 10 minutes."
-
-      # ----------------------------------------------------------
       # Docker healthcheck failed
       # ----------------------------------------------------------
       - alert: DockerContainerUnhealthy
         expr: |
           container_health_status{
-            job="docker",
+            job="docker-exporter",
             name!="docker-exporter"
           } == 0
         for: 2m
@@ -290,7 +267,7 @@ groups:
         expr: |
           rate(
             container_cpu_usage_seconds_total{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }[5m]
           ) > 0.8
@@ -310,7 +287,7 @@ groups:
         expr: |
           rate(
             container_cpu_usage_seconds_total{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }[5m]
           ) > 1.5
@@ -332,18 +309,18 @@ groups:
         expr: |
           (
             container_memory_working_set_bytes{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }
             /
             container_memory_limit_bytes{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }
           ) > 0.80
           and
           container_memory_limit_bytes{
-            job="docker",
+            job="docker-exporter",
             name!="docker-exporter"
           } > 0
         for: 10m
@@ -364,18 +341,18 @@ groups:
         expr: |
           (
             container_memory_working_set_bytes{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }
             /
             container_memory_limit_bytes{
-              job="docker",
+              job="docker-exporter",
               name!="docker-exporter"
             }
           ) > 0.95
           and
           container_memory_limit_bytes{
-            job="docker",
+            job="docker-exporter",
             name!="docker-exporter"
           } > 0
         for: 5m
