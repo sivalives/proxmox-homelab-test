@@ -186,3 +186,64 @@ groups:
         annotations:
           summary: "NOTIFICATION FAILURE"
           description: "Alertmanager is failing to deliver notifications to {{ $labels.receiver }}."
+
+
+  - name: docker_alerts
+    interval: 30s
+    rules:
+
+      - alert: DockerContainerCPUHigh
+        expr: |
+          (
+            sum by (lxc, name) (
+              rate(container_cpu_usage_seconds_total{id!=" /", name!=""}[5m])
+            ) * 100
+          ) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+          component: container
+        annotations:
+          summary: "CONTAINER CPU HIGH"
+          description: "Container {{ $labels.name }} on {{ $labels.lxc }} is using {{ $value | humanize }}% CPU."
+
+      - alert: DockerContainerMemoryHigh
+        expr: |
+          (
+            container_memory_working_set_bytes{id!="/", name!=""}
+            /
+            container_spec_memory_limit_bytes{id!="/", name!=""}
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+          component: container
+        annotations:
+          summary: "CONTAINER MEMORY HIGH"
+          description: "Container {{ $labels.name }} on {{ $labels.lxc }} is using {{ $value | humanize }}% of its memory limit."
+
+      - alert: DockerContainerDown
+        expr: |
+          time() - container_last_seen{id!="/", name!=""} > 60
+        for: 2m
+        labels:
+          severity: critical
+          service: docker
+          component: container
+        annotations:
+          summary: "CONTAINER DOWN"
+          description: "Container {{ $labels.name }} on {{ $labels.lxc }} has stopped reporting metrics."
+
+      - alert: DockerContainerRestarted
+        expr: |
+          changes(container_start_time_seconds{id!="/", name!=""}[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: docker
+          component: container
+        annotations:
+          summary: "CONTAINER RESTARTED"
+          description: "Container {{ $labels.name }} on {{ $labels.lxc }} has restarted."
