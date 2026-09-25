@@ -50,13 +50,8 @@ services:
       # Do NOT put the plaintext password here.
       NTFY_AUTH_USERS: "${NTFY_USER}:${NTFY_PASSWORD_HASH}:user"
 
-      # Allow the user read/write access to all homelab_* topics.
-      # Examples:
-      #   homelab_alerts
-      #   homelab_proxmox
-      #   homelab_docker
-      #   homelab_backup
-      NTFY_AUTH_ACCESS: "${NTFY_USER}:homelab_*:rw,${NTFY_USER}:proxmox_critical:rw,${NTFY_USER}:proxmox_warning:rw,${NTFY_USER}:system_alerts:rw"
+      # Allow the user read/write access to all below topics.
+      NTFY_AUTH_ACCESS: "${NTFY_USER}:proxmox_alerts:rw,${NTFY_USER}:docker_alerts:rw,${NTFY_USER}:system_alerts:rw"
       
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/v1/health"]
