@@ -12,25 +12,15 @@ services:
       - "{{ cadvisor_port }}:8080"
 
     volumes:
-      # Root filesystem
-      - /:/rootfs:ro
-      
-      # Docker daemon socket (CRITICAL - was missing)
+      # FIX: Ensure socket is mounted
       - /var/run/docker.sock:/var/run/docker.sock:ro
       
-      # Runtime
+      - /:/rootfs:ro
       - /var/run:/var/run:ro
-      
-      # Cgroups for LXC (correct path)
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /sys:/sys:ro
-      
-      # Device info
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /dev/disk:/dev/disk:ro
-      - /dev:/dev:ro
     
     command:
       - --docker_only=true
-      - --housekeeping_interval=15s
-      - --allow_dynamic_housekeeping=true
       - --containerd=/run/containerd/containerd.sock
