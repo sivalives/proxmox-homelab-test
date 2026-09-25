@@ -64,7 +64,7 @@ groups:
       # --------------------------------------------------------
       - alert: ProxmoxNodeDown
         expr: |
-          pve_up == 0
+          pve_up{id="node/proxmox"} == 0
         for: 10s
         labels:
           severity: critical
