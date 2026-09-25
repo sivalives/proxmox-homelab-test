@@ -3,62 +3,98 @@
 
 groups:
 
+  # ============================================================
+  # PROXMOX ALERTS
+  # ============================================================
+
   - name: proxmox_alerts
     interval: 60s
     rules:
 
-      # LXC Disk usage warning (80%)
+      # --------------------------------------------------------
+      # LXC Disk usage warning (>80%)
+      # Dynamically gets LXC name from pve_guest_info
+      # --------------------------------------------------------
       - alert: ProxmoxLXCDiskHigh
         expr: |
-          (pve_disk_usage_bytes{id=~"lxc/.*"} / pve_disk_size_bytes{id=~"lxc/.*"}) * 100 > 80
+          (
+            (
+              pve_disk_usage_bytes{id=~"lxc/.*"}
+              / pve_disk_size_bytes{id=~"lxc/.*"}
+            ) * 100
+          )
+          * on(id) group_left(name,node,type)
+            pve_guest_info{type="lxc"}
+          > 80
         for: 5m
         labels:
           severity: warning
           service: proxmox
           component: storage
         annotations:
-          summary: "LXC {{ $labels.id }} disk usage HIGH ({{ $value | humanize }}%)"
-          description: "LXC container {{ $labels.id }} is using {{ $value | humanize }}% of disk space. Please check and clean up if necessary."
+          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — Disk usage HIGH"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} is using {{ $value | humanize }}% of disk space. Please check and clean up if necessary."
 
-      # LXC Disk usage critical (90%)
+      # --------------------------------------------------------
+      # LXC Disk usage critical (>90%)
+      # Dynamically gets LXC name from pve_guest_info
+      # --------------------------------------------------------
       - alert: ProxmoxLXCDiskCritical
         expr: |
-          (pve_disk_usage_bytes{id=~"lxc/.*"} / pve_disk_size_bytes{id=~"lxc/.*"}) * 100 > 90
+          (
+            (
+              pve_disk_usage_bytes{id=~"lxc/.*"}
+              / pve_disk_size_bytes{id=~"lxc/.*"}
+            ) * 100
+          )
+          * on(id) group_left(name,node,type)
+            pve_guest_info{type="lxc"}
+          > 90
         for: 2m
         labels:
           severity: critical
           service: proxmox
           component: storage
         annotations:
-          summary: "LXC {{ $labels.id }} disk usage CRITICAL ({{ $value | humanize }}%)"
-          description: "LXC container {{ $labels.id }} is at {{ $value | humanize }}% disk usage! Immediate action required."
+          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — Disk usage CRITICAL"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} is at {{ $value | humanize }}% disk usage. Immediate action required."
 
+      # --------------------------------------------------------
       # Proxmox Node Down
+      # --------------------------------------------------------
       - alert: ProxmoxNodeDown
-        expr: pve_up == 0
+        expr: |
+          pve_up == 0
         for: 5m
         labels:
           severity: critical
           service: proxmox
           component: node
         annotations:
-          summary: "Proxmox node {{ $labels.node }} is DOWN"
-          description: "Proxmox VE node {{ $labels.node }} at 192.168.1.100 is not responding."
+          summary: "Proxmox — Node DOWN"
+          description: "Proxmox VE node at 192.168.1.100 is not responding."
 
+      # --------------------------------------------------------
       # Proxmox Memory usage high
+      # --------------------------------------------------------
       - alert: ProxmoxMemoryHigh
         expr: |
-          (pve_memory_usage_bytes{id=~"(lxc|qemu)/.*"} / pve_memory_limit_bytes{id=~"(lxc|qemu)/.*"}) * 100 > 85
+          (
+            pve_memory_usage_bytes{id=~"(lxc|qemu)/.*"}
+            / pve_memory_limit_bytes{id=~"(lxc|qemu)/.*"}
+          ) * 100 > 85
         for: 10m
         labels:
           severity: warning
           service: proxmox
           component: memory
         annotations:
-          summary: "{{ $labels.id }} memory usage high ({{ $value | humanize }}%)"
+          summary: "{{ $labels.id }} — Memory usage HIGH ({{ $value | humanize }}%)"
           description: "Container/VM {{ $labels.id }} is using {{ $value | humanize }}% of allocated memory."
 
-      # VM/LXC uptime change (restart detection)
+      # --------------------------------------------------------
+      # VM/LXC restart detection
+      # --------------------------------------------------------
       - alert: ProxmoxContainerRestart
         expr: |
           rate(pve_container_uptime_seconds[5m]) < 0
@@ -71,13 +107,21 @@ groups:
           summary: "Container {{ $labels.id }} restarted"
           description: "Container {{ $labels.id }} has restarted (uptime decreased)."
 
+
+  # ============================================================
+  # SYSTEM ALERTS
+  # ============================================================
+
   - name: system_alerts
     interval: 30s
     rules:
 
+      # --------------------------------------------------------
       # Prometheus scrape errors
+      # --------------------------------------------------------
       - alert: PrometheusScrapeFailed
-        expr: up == 0
+        expr: |
+          up == 0
         for: 5m
         labels:
           severity: warning
@@ -86,7 +130,9 @@ groups:
           summary: "Prometheus scrape failed for {{ $labels.job }}"
           description: "Prometheus cannot scrape {{ $labels.job }} on {{ $labels.instance }}."
 
+      # --------------------------------------------------------
       # Prometheus storage issues
+      # --------------------------------------------------------
       - alert: PrometheusStorageChurning
         expr: |
           rate(prometheus_tsdb_symbol_table_size_bytes[5m]) > 1024*1024*10
@@ -99,22 +145,32 @@ groups:
           summary: "Prometheus TSDB storage churning"
           description: "Prometheus TSDB storage is being churned at high rate. May indicate high cardinality metrics."
 
+
+  # ============================================================
+  # ALERTMANAGER ALERTS
+  # ============================================================
+
   - name: alertmanager_alerts
     interval: 30s
     rules:
 
-      # AlertManager down
+      # --------------------------------------------------------
+      # Alertmanager down
+      # --------------------------------------------------------
       - alert: AlertManagerDown
-        expr: up{job="alertmanager"} == 0
+        expr: |
+          up{job="alertmanager"} == 0
         for: 5m
         labels:
           severity: critical
           service: alertmanager
         annotations:
-          summary: "AlertManager is DOWN"
+          summary: "AlertManager — DOWN"
           description: "AlertManager instance is not responding."
 
-      # AlertManager notification failures
+      # --------------------------------------------------------
+      # Alertmanager notification failures
+      # --------------------------------------------------------
       - alert: AlertManagerNotificationFailures
         expr: |
           rate(alertmanager_notifications_failed_total[5m]) > 0
@@ -123,5 +179,5 @@ groups:
           severity: warning
           service: alertmanager
         annotations:
-          summary: "AlertManager notification delivery failed"
+          summary: "AlertManager — Notification delivery failed"
           description: "AlertManager is failing to send notifications to {{ $labels.receiver }}."
