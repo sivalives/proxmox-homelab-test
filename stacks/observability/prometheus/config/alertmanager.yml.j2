@@ -58,6 +58,12 @@ receivers:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          host: 'observability'
+          index: 'docker_logs'
 
   # Proxmox critical
   - name: 'proxmox-critical'
@@ -75,6 +81,12 @@ receivers:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          host: 'observability'
+          index: 'docker_logs'
 
   # Proxmox warning
   - name: 'proxmox-warning'
@@ -92,6 +104,12 @@ receivers:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          host: 'observability'
+          index: 'docker_logs'
 
   # System alerts
   - name: 'system-alerts'
@@ -109,6 +127,12 @@ receivers:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+        payload:
+          event: '{{ . | toJson }}'
+          sourcetype: 'alertmanager'
+          source: 'alertmanager'
+          host: 'observability'
+          index: 'docker_logs'
 
 inhibit_rules:
   - source_match:
