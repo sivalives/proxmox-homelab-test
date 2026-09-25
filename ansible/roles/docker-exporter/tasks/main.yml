@@ -1,0 +1,48 @@
+---
+- name: Remove cAdvisor container
+  ansible.builtin.command:
+    cmd: docker rm -f cadvisor
+  register: cadvisor_remove
+  failed_when: false
+  changed_when: cadvisor_remove.rc == 0
+
+- name: Remove old cAdvisor stack directory
+  ansible.builtin.file:
+    path: /opt/homelab/stacks/cadvisor
+    state: absent
+
+- name: Create Docker exporter directory
+  ansible.builtin.file:
+    path: /opt/homelab/stacks/docker-exporter
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy Docker exporter compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: /opt/homelab/stacks/docker-exporter/compose.yml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Docker exporter
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: /opt/homelab/stacks/docker-exporter
+  register: docker_exporter_compose
+  changed_when: >
+    'Started' in docker_exporter_compose.stdout or
+    'Created' in docker_exporter_compose.stdout or
+    'Recreated' in docker_exporter_compose.stdout
+
+- name: Wait for Docker exporter
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9713/metrics
+    method: GET
+    status_code: 200
+  register: docker_exporter_health
+  retries: 10
+  delay: 2
+  until: docker_exporter_health.status == 200

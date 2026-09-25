@@ -1,8 +1,8 @@
 ---
-- name: Setup cadvisor cotnainers in docker hosts
+- name: Deploy Docker Prometheus exporter
   hosts: docker_hosts
   become: true
   gather_facts: true
 
   roles:
-    - cadvisor
+    - docker_exporter

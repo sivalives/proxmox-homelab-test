@@ -1,0 +1,11 @@
+services:
+  docker-exporter:
+    image: ghcr.io/dlepaux/docker-exporter:latest
+    container_name: docker-exporter
+    restart: unless-stopped
+
+    ports:
+      - "9713:9713"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
