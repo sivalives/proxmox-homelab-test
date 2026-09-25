@@ -47,15 +47,17 @@ receivers:
       - url: 'http://ntfy:80/homelab_alerts'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Bearer ${NTFY_TOKEN}'
+        authorization:
+          type: Bearer
+          credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       # Splunk HEC (standard approach)
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+        authorization:
+          type: Splunk
+          credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # Proxmox critical
   - name: 'proxmox-critical'
@@ -63,14 +65,16 @@ receivers:
       - url: 'http://ntfy:80/proxmox_critical'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Bearer ${NTFY_TOKEN}'
+          authorization:
+            type: Bearer
+            credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # Proxmox warning
   - name: 'proxmox-warning'
@@ -78,14 +82,16 @@ receivers:
       - url: 'http://ntfy:80/proxmox_warning'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Bearer ${NTFY_TOKEN}'
+          authorization:
+            type: Bearer
+            credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # System alerts
   - name: 'system-alerts'
@@ -93,14 +99,16 @@ receivers:
       - url: 'http://ntfy:80/system_alerts'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Bearer ${NTFY_TOKEN}'
+          authorization:
+            type: Bearer
+            credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-          headers:
-            Authorization: 'Splunk ${SPLUNK_HEC_TOKEN}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
 inhibit_rules:
   - source_match:
