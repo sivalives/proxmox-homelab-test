@@ -50,15 +50,14 @@ receivers:
           authorization:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
-
+            
       # Splunk HEC
       - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          http_headers:
-            Authorization:
-              secrets:
-                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # Proxmox critical
   - name: 'proxmox-critical'
@@ -74,10 +73,9 @@ receivers:
       - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          http_headers:
-            Authorization:
-              secrets:
-                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # Proxmox warning
   - name: 'proxmox-warning'
@@ -93,10 +91,9 @@ receivers:
       - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          http_headers:
-            Authorization:
-              secrets:
-                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # System alerts
   - name: 'system-alerts'
@@ -112,10 +109,9 @@ receivers:
       - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          http_headers:
-            Authorization:
-              secrets:
-                - 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
 inhibit_rules:
   - source_match:
