@@ -47,17 +47,17 @@ receivers:
       - url: 'http://ntfy:80/homelab_alerts'
         send_resolved: true
         http_config:
-        authorization:
-          type: Bearer
-          credentials: '{{ app_secrets.NTFY_TOKEN }}'
+          authorization:
+            type: Bearer
+            credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       # Splunk HEC (standard approach)
       - url: 'http://192.168.1.102:8088/services/collector'
         send_resolved: true
         http_config:
-        authorization:
-          type: Splunk
-          credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          authorization:
+            type: Splunk
+            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
 
   # Proxmox critical
   - name: 'proxmox-critical'
