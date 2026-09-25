@@ -1,20 +1,18 @@
 # Prometheus alert rules
-# Location: /opt/homelab/prometheus/rules.yml
+# Location: /opt/homelab/stacks/observability/config/rules.yml
 
 groups:
 
   # ============================================================
-  # PROXMOX ALERTS
+  # PROXMOX
   # ============================================================
-
   - name: proxmox_alerts
     interval: 60s
     rules:
 
-      # --------------------------------------------------------
-      # LXC Disk usage warning (>80%)
-      # Dynamically gets LXC name from pve_guest_info
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # LXC disk usage > 80%
+      # ----------------------------------------------------------
       - alert: ProxmoxLXCDiskHigh
         expr: |
           (
@@ -32,13 +30,12 @@ groups:
           service: proxmox
           component: storage
         annotations:
-          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — Disk usage HIGH"
-          description: "LXC {{ $labels.id }} - {{ $labels.name }} is using {{ $value | humanize }}% of disk space. Please check and clean up if necessary."
+          summary: "DISK HIGH"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} is using {{ $value | humanize }}% disk space."
 
-      # --------------------------------------------------------
-      # LXC Disk usage critical (>90%)
-      # Dynamically gets LXC name from pve_guest_info
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # LXC disk usage > 90%
+      # ----------------------------------------------------------
       - alert: ProxmoxLXCDiskCritical
         expr: |
           (
@@ -56,12 +53,12 @@ groups:
           service: proxmox
           component: storage
         annotations:
-          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — Disk usage CRITICAL"
-          description: "LXC {{ $labels.id }} - {{ $labels.name }} is at {{ $value | humanize }}% disk usage. Immediate action required."
+          summary: "DISK CRITICAL"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} is using {{ $value | humanize }}% disk space."
 
-      # --------------------------------------------------------
-      # Proxmox Node Down
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # Physical Proxmox node down
+      # ----------------------------------------------------------
       - alert: ProxmoxNodeDown
         expr: |
           pve_up{id="node/proxmox"} == 0
@@ -71,13 +68,12 @@ groups:
           service: proxmox
           component: node
         annotations:
-          summary: "Proxmox — Node DOWN"
-          description: "Proxmox VE node at 192.168.1.100 is not responding."
+          summary: "NODE DOWN"
+          description: "Proxmox node is not responding."
 
-      # --------------------------------------------------------
-      # Proxmox LXC Down
-      # --------------------------------------------------------
-
+      # ----------------------------------------------------------
+      # Individual LXC down
+      # ----------------------------------------------------------
       - alert: ProxmoxLXCDown
         expr: |
           (
@@ -91,12 +87,12 @@ groups:
           service: proxmox
           component: lxc
         annotations:
-          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — DOWN"
-          description: "LXC {{ $labels.id }} - {{ $labels.name }} on Proxmox node {{ $labels.node }} is not running."
+          summary: "DOWN"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} is down on Proxmox."
 
-      # --------------------------------------------------------
-      # Proxmox Memory usage high
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # LXC / VM memory > 85%
+      # ----------------------------------------------------------
       - alert: ProxmoxMemoryHigh
         expr: |
           (
@@ -109,12 +105,15 @@ groups:
           service: proxmox
           component: memory
         annotations:
-          summary: "{{ $labels.id }} — Memory usage HIGH ({{ $value | humanize }}%)"
-          description: "Container/VM {{ $labels.id }} is using {{ $value | humanize }}% of allocated memory."
+          summary: "MEMORY HIGH"
+          description: "{{ $labels.id }} is using {{ $value | humanize }}% of allocated memory."
 
-      # --------------------------------------------------------
-      # VM/LXC restart detection
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # LXC restart detection
+      #
+      # Kept intentionally for testing.
+      # A restart causes container uptime to drop.
+      # ----------------------------------------------------------
       - alert: ProxmoxContainerRestart
         expr: |
           rate(pve_container_uptime_seconds[5m]) < 0
@@ -124,21 +123,20 @@ groups:
           service: proxmox
           component: container
         annotations:
-          summary: "Container {{ $labels.id }} restarted"
-          description: "Container {{ $labels.id }} has restarted (uptime decreased)."
+          summary: "CONTAINER RESTARTED"
+          description: "Container {{ $labels.id }} has restarted because its uptime decreased."
 
 
   # ============================================================
-  # SYSTEM ALERTS
+  # PROMETHEUS / SYSTEM
   # ============================================================
-
   - name: system_alerts
     interval: 30s
     rules:
 
-      # --------------------------------------------------------
-      # Prometheus scrape errors
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # Any Prometheus scrape target unavailable
+      # ----------------------------------------------------------
       - alert: PrometheusScrapeFailed
         expr: |
           up == 0
@@ -146,37 +144,22 @@ groups:
         labels:
           severity: warning
           service: prometheus
+          component: scrape
         annotations:
-          summary: "Prometheus scrape failed for {{ $labels.job }}"
+          summary: "SCRAPE FAILED"
           description: "Prometheus cannot scrape {{ $labels.job }} on {{ $labels.instance }}."
 
-      # --------------------------------------------------------
-      # Prometheus storage issues
-      # --------------------------------------------------------
-      - alert: PrometheusStorageChurning
-        expr: |
-          rate(prometheus_tsdb_symbol_table_size_bytes[5m]) > 1024*1024*10
-        for: 10m
-        labels:
-          severity: warning
-          service: prometheus
-          component: storage
-        annotations:
-          summary: "Prometheus TSDB storage churning"
-          description: "Prometheus TSDB storage is being churned at high rate. May indicate high cardinality metrics."
-
 
   # ============================================================
-  # ALERTMANAGER ALERTS
+  # ALERTMANAGER
   # ============================================================
-
   - name: alertmanager_alerts
     interval: 30s
     rules:
 
-      # --------------------------------------------------------
-      # Alertmanager down
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # Alertmanager unavailable
+      # ----------------------------------------------------------
       - alert: AlertManagerDown
         expr: |
           up{job="alertmanager"} == 0
@@ -184,13 +167,14 @@ groups:
         labels:
           severity: critical
           service: alertmanager
+          component: service
         annotations:
-          summary: "AlertManager — DOWN"
-          description: "AlertManager instance is not responding."
+          summary: "DOWN"
+          description: "Alertmanager is not responding."
 
-      # --------------------------------------------------------
-      # Alertmanager notification failures
-      # --------------------------------------------------------
+      # ----------------------------------------------------------
+      # Alertmanager notification delivery failures
+      # ----------------------------------------------------------
       - alert: AlertManagerNotificationFailures
         expr: |
           rate(alertmanager_notifications_failed_total[5m]) > 0
@@ -198,6 +182,7 @@ groups:
         labels:
           severity: warning
           service: alertmanager
+          component: notification
         annotations:
-          summary: "AlertManager — Notification delivery failed"
-          description: "AlertManager is failing to send notifications to {{ $labels.receiver }}."
+          summary: "NOTIFICATION FAILURE"
+          description: "Alertmanager is failing to deliver notifications to {{ $labels.receiver }}."

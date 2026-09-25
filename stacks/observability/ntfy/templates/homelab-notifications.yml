@@ -1,0 +1,32 @@
+{{- $alert := index .alerts 0 -}}
+{{- $severity := (index .commonLabels "severity") | upper -}}
+
+{{- $emoji := "ℹ️" -}}
+{{- if eq $severity "CRITICAL" -}}
+  {{- $emoji = "🚨" -}}
+{{- else if eq $severity "WARNING" -}}
+  {{- $emoji = "⚠️" -}}
+{{- end -}}
+
+{{- if eq .status "resolved" -}}
+  {{- $emoji = "✅" -}}
+{{- end -}}
+
+{{- if $alert.labels.id }}
+  {{- $id := $alert.labels.id | trimPrefix "lxc/" -}}
+  {{- if $alert.labels.name }}
+{{ $emoji }} LXC {{ $id }} - {{ $alert.labels.name | upper }} — {{ $alert.annotations.summary }}
+  {{- else }}
+{{ $emoji }} {{ $alert.annotations.summary }}
+  {{- end }}
+{{- else }}
+{{ $emoji }} {{ $alert.annotations.summary }}
+{{- end }}
+
+Alert: {{ $alert.labels.alertname }}
+Time: {{ $alert.startsAt | formatTime "02 Jan 2006 15:04:05" "Asia/Kolkata" }} IST
+
+{{- if $alert.annotations.description }}
+
+{{ $alert.annotations.description }}
+{{- end -}}

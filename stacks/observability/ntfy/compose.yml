@@ -15,6 +15,7 @@ services:
     volumes:
       - /opt/docker-data/ntfy/cache:/var/cache/ntfy
       - /opt/docker-data/ntfy/etc:/etc/ntfy
+      - ./templates:/etc/ntfy/templates:ro
 
     environment:
       # ----------------------------------------------------------
