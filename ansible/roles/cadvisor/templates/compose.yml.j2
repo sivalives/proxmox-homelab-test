@@ -4,16 +4,33 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
 
     ports:
       - "{{ cadvisor_port }}:8080"
 
     volumes:
-    - /:/rootfs:ro
-    - /var/run:/var/run:ro
-    - /sys:/sys:ro
-    - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    - /dev/disk:/dev/disk:ro
+      # Root filesystem
+      - /:/rootfs:ro
+      
+      # Docker daemon socket (CRITICAL - was missing)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+      # Runtime
+      - /var/run:/var/run:ro
+      
+      # Cgroups for LXC (correct path)
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys:/sys:ro
+      
+      # Device info
+      - /dev/disk:/dev/disk:ro
+      - /dev:/dev:ro
     
     command:
       - --docker_only=true
+      - --housekeeping_interval=15s
+      - --allow_dynamic_housekeeping=true
+      - --containerd=/run/containerd/containerd.sock
