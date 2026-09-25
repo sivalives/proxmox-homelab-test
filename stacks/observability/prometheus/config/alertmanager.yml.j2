@@ -52,14 +52,14 @@ receivers:
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
       # Splunk HEC (standard approach)
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector/event'
         send_resolved: true
         http_config:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
         payload:
-          event: '{{ . | toJson }}'
+          event: '{% raw %}{{ . | toJson }}{% endraw %}'
           sourcetype: 'alertmanager'
           source: 'alertmanager'
           host: 'observability'
@@ -75,14 +75,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector/event'
         send_resolved: true
         http_config:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
         payload:
-          event: '{{ . | toJson }}'
+          event: '{% raw %}{{ . | toJson }}{% endraw %}'
           sourcetype: 'alertmanager'
           source: 'alertmanager'
           host: 'observability'
@@ -98,14 +98,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector/event'
         send_resolved: true
         http_config:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
         payload:
-          event: '{{ . | toJson }}'
+          event: '{% raw %}{{ . | toJson }}{% endraw %}'
           sourcetype: 'alertmanager'
           source: 'alertmanager'
           host: 'observability'
@@ -121,14 +121,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector'
+      - url: 'http://192.168.1.102:8088/services/collector/event'
         send_resolved: true
         http_config:
           authorization:
             type: Splunk
             credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
         payload:
-          event: '{{ . | toJson }}'
+          event: '{% raw %}{{ . | toJson }}{% endraw %}'
           sourcetype: 'alertmanager'
           source: 'alertmanager'
           host: 'observability'
