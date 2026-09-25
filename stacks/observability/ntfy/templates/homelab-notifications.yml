@@ -1,32 +1,27 @@
+# Homelab Alertmanager → ntfy template
+
 {{- $alert := index .alerts 0 -}}
-{{- $severity := (index .commonLabels "severity") | upper -}}
+{{- $severity := index .commonLabels "severity" -}}
 
 {{- $emoji := "ℹ️" -}}
-{{- if eq $severity "CRITICAL" -}}
-  {{- $emoji = "🚨" -}}
-{{- else if eq $severity "WARNING" -}}
-  {{- $emoji = "⚠️" -}}
+{{- if eq $severity "critical" -}}
+{{- $emoji = "🚨" -}}
+{{- else if eq $severity "warning" -}}
+{{- $emoji = "⚠️" -}}
 {{- end -}}
 
 {{- if eq .status "resolved" -}}
-  {{- $emoji = "✅" -}}
+{{- $emoji = "✅" -}}
 {{- end -}}
 
-{{- if $alert.labels.id }}
-  {{- $id := $alert.labels.id | trimPrefix "lxc/" -}}
-  {{- if $alert.labels.name }}
+{{- if $alert.labels.id -}}
+{{- $id := $alert.labels.id | trimPrefix "lxc/" -}}
 {{ $emoji }} LXC {{ $id }} - {{ $alert.labels.name | upper }} — {{ $alert.annotations.summary }}
-  {{- else }}
-{{ $emoji }} {{ $alert.annotations.summary }}
-  {{- end }}
-{{- else }}
+{{- else -}}
 {{ $emoji }} {{ $alert.annotations.summary }}
 {{- end }}
 
 Alert: {{ $alert.labels.alertname }}
 Time: {{ $alert.startsAt | formatTime "02 Jan 2006 15:04:05" "Asia/Kolkata" }} IST
 
-{{- if $alert.annotations.description }}
-
 {{ $alert.annotations.description }}
-{{- end -}}
