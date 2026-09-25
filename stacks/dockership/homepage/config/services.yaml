@@ -4,21 +4,18 @@
         icon: homepage.png
         href: http://homepage.lan
         description: Homelab Dashboard
-        server: local
         container: homepage
 
     - Nginx Proxy Manager:
         icon: nginx-proxy-manager.png
         href: http://npm.lan
         description: Reverse Proxy
-        server: local
         container: nginx-proxy-manager
 
     - Dockhand:
         icon: dockhand.png
         href: http://docker.lan/
         description: Docker Management
-        server: local
         container: dockhand
 
     - Pi-hole:
