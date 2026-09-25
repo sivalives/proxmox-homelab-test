@@ -16,7 +16,11 @@
     mode: '0644'
 
 - name: Start cAdvisor
-  community.docker.docker_compose_v2:
-    project_src: /opt/homelab/stacks/cadvisor
-    state: present
-    pull: missing
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: /opt/homelab/stacks/cadvisor
+  register: cadvisor_compose
+  changed_when: >
+    'Started' in cadvisor_compose.stdout or
+    'Created' in cadvisor_compose.stdout or
+    'Recreated' in cadvisor_compose.stdout
