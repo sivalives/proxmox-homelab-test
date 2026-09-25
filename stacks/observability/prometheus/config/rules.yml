@@ -75,6 +75,26 @@ groups:
           description: "Proxmox VE node at 192.168.1.100 is not responding."
 
       # --------------------------------------------------------
+      # Proxmox LXC Down
+      # --------------------------------------------------------
+
+      - alert: ProxmoxLXCDown
+        expr: |
+          (
+            pve_up{id=~"lxc/.*"} == 0
+          )
+          * on(id) group_left(name,node,type)
+            pve_guest_info{type="lxc"}
+        for: 10s
+        labels:
+          severity: critical
+          service: proxmox
+          component: lxc
+        annotations:
+          summary: "LXC {{ $labels.id }} - {{ $labels.name }} — DOWN"
+          description: "LXC {{ $labels.id }} - {{ $labels.name }} on Proxmox node {{ $labels.node }} is not running."
+
+      # --------------------------------------------------------
       # Proxmox Memory usage high
       # --------------------------------------------------------
       - alert: ProxmoxMemoryHigh
