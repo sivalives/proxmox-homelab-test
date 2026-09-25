@@ -51,19 +51,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      # Splunk HEC (standard approach)
-      - url: 'http://192.168.1.102:8088/services/collector/event'
+      # Splunk HEC (raw endpoint - no wrapping needed)
+      - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
-        payload:
-          event: 'Alertmanager test'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          host: 'observability'
-          index: 'docker_logs'
+          headers:
+            Authorization: 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          tls_config:
+            insecure_skip_verify: true
 
   # Proxmox critical
   - name: 'proxmox-critical'
@@ -75,18 +70,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector/event'
+      # Splunk HEC (raw endpoint - no wrapping needed)
+      - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
-        payload:
-          event: 'Alertmanager test'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          host: 'observability'
-          index: 'docker_logs'
+          headers:
+            Authorization: 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          tls_config:
+            insecure_skip_verify: true
 
   # Proxmox warning
   - name: 'proxmox-warning'
@@ -98,18 +89,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector/event'
+      # Splunk HEC (raw endpoint - no wrapping needed)
+      - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
-        payload:
-          event: 'Alertmanager test'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          host: 'observability'
-          index: 'docker_logs'
+          headers:
+            Authorization: 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          tls_config:
+            insecure_skip_verify: true
 
   # System alerts
   - name: 'system-alerts'
@@ -121,18 +108,14 @@ receivers:
             type: Bearer
             credentials: '{{ app_secrets.NTFY_TOKEN }}'
 
-      - url: 'http://192.168.1.102:8088/services/collector/event'
+      # Splunk HEC (raw endpoint - no wrapping needed)
+      - url: 'http://192.168.1.102:8088/services/collector/raw?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C'
         send_resolved: true
         http_config:
-          authorization:
-            type: Splunk
-            credentials: '{{ shared_secrets.SPLUNK_HEC_TOKEN }}'
-        payload:
-          event: 'Alertmanager test'
-          sourcetype: 'alertmanager'
-          source: 'alertmanager'
-          host: 'observability'
-          index: 'docker_logs'
+          headers:
+            Authorization: 'Splunk {{ shared_secrets.SPLUNK_HEC_TOKEN }}'
+          tls_config:
+            insecure_skip_verify: true
 
 inhibit_rules:
   - source_match:
