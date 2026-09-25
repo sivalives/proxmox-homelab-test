@@ -17,7 +17,7 @@ message: |
   {{- end }}
 
   Alert: {{ $alert.labels.alertname }}
-  Time: {{ date "02 Jan 2006 15:04:05 MST" $alert.startsAt }} IST
+  Time: {{ date "02 Jan 2006 15:04:05 MST" $alert.startsAt }}
 
   {{ $alert.annotations.description }}
 
