@@ -74,10 +74,15 @@
         href: http://splunk.lan
         description: Logs & Security Analytics
 
-    - Netdata:
-        icon: netdata.png
-        href: http://netdata.lan
-        description: Network Statistics & Alerts to Ntfy
+    - Prometheus:
+        icon: prometheus.png
+        href: http://prometheus.lan
+        description: Prometheus
+
+    - Prometheus:
+        icon: alertmanager.png
+        href: http://alertmanager.lan
+        description: Prometheus Alert Manager - Intergrates to Spunk and Ntfy
 
 - Messaging:
     - Proxmox Alerts:
