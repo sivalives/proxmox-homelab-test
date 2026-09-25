@@ -1,0 +1,5 @@
+# Install required collections using 
+### ansible-galaxy collection install -r ansible/requirements.yml
+---
+collections:
+  - name: community.docker
