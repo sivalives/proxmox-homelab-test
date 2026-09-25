@@ -188,45 +188,52 @@ groups:
           description: "Alertmanager is failing to deliver notifications to {{ $labels.receiver }}."
 
 
+  # ============================================================
+  # DOCKER
+  # ============================================================
   - name: docker_alerts
     interval: 30s
     rules:
 
-      - alert: DockerContainerCPUHigh
+      # ----------------------------------------------------------
+      # Docker exporter unavailable
+      # ----------------------------------------------------------
+      - alert: DockerExporterDown
         expr: |
-          (
-            sum by (lxc, name) (
-              rate(container_cpu_usage_seconds_total{id!=" /", name!=""}[5m])
-            ) * 100
-          ) > 80
-        for: 5m
+          up{job="docker"} == 0
+        for: 2m
         labels:
-          severity: warning
+          severity: critical
           service: docker
-          component: container
+          component: exporter
         annotations:
-          summary: "CONTAINER CPU HIGH"
-          description: "Container {{ $labels.name }} on {{ $labels.lxc }} is using {{ $value | humanize }}% CPU."
+          summary: "DOCKER EXPORTER DOWN"
+          description: "Docker exporter is not responding on LXC {{ $labels.lxc }}."
 
-      - alert: DockerContainerMemoryHigh
+      # ----------------------------------------------------------
+      # Docker daemon unreachable
+      # ----------------------------------------------------------
+      - alert: DockerDaemonUnreachable
         expr: |
-          (
-            container_memory_working_set_bytes{id!="/", name!=""}
-            /
-            container_spec_memory_limit_bytes{id!="/", name!=""}
-          ) * 100 > 85
-        for: 5m
+          docker_exporter_up{job="docker"} == 0
+        for: 2m
         labels:
-          severity: warning
+          severity: critical
           service: docker
-          component: container
+          component: daemon
         annotations:
-          summary: "CONTAINER MEMORY HIGH"
-          description: "Container {{ $labels.name }} on {{ $labels.lxc }} is using {{ $value | humanize }}% of its memory limit."
+          summary: "DOCKER DOWN"
+          description: "Docker exporter cannot reach the Docker daemon on LXC {{ $labels.lxc }}."
 
-      - alert: DockerContainerDown
+      # ----------------------------------------------------------
+      # Docker container stopped / exited
+      # ----------------------------------------------------------
+      - alert: DockerContainerExited
         expr: |
-          time() - container_last_seen{id!="/", name!=""} > 60
+          container_state{
+            job="docker",
+            name!="docker-exporter"
+          } == 0
         for: 2m
         labels:
           severity: critical
@@ -234,16 +241,148 @@ groups:
           component: container
         annotations:
           summary: "CONTAINER DOWN"
-          description: "Container {{ $labels.name }} on {{ $labels.lxc }} has stopped reporting metrics."
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is no longer running."
 
-      - alert: DockerContainerRestarted
+      # ----------------------------------------------------------
+      # Docker container restarting / flapping
+      #
+      # More than 2 start-time changes in 10 minutes.
+      # ----------------------------------------------------------
+      - alert: DockerContainerRestarting
         expr: |
-          changes(container_start_time_seconds{id!="/", name!=""}[10m]) > 0
-        for: 0m
+          changes(
+            container_start_time_seconds{
+              job="docker",
+              name!="docker-exporter"
+            }[10m]
+          ) > 2
+        for: 1m
         labels:
-          severity: warning
+          severity: critical
           service: docker
           component: container
         annotations:
-          summary: "CONTAINER RESTARTED"
-          description: "Container {{ $labels.name }} on {{ $labels.lxc }} has restarted."
+          summary: "CONTAINER RESTARTING"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} has restarted more than twice in the last 10 minutes."
+
+      # ----------------------------------------------------------
+      # Docker healthcheck failed
+      # ----------------------------------------------------------
+      - alert: DockerContainerUnhealthy
+        expr: |
+          container_health_status{
+            job="docker",
+            name!="docker-exporter"
+          } == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: docker
+          component: health
+        annotations:
+          summary: "CONTAINER UNHEALTHY"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} has been unhealthy for more than 2 minutes."
+
+      # ----------------------------------------------------------
+      # Docker container CPU > 80% of one CPU
+      # ----------------------------------------------------------
+      - alert: DockerContainerCPUHigh
+        expr: |
+          rate(
+            container_cpu_usage_seconds_total{
+              job="docker",
+              name!="docker-exporter"
+            }[5m]
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: docker
+          component: cpu
+        annotations:
+          summary: "CONTAINER CPU HIGH"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is using more than 80% of one CPU core for 10 minutes."
+
+      # ----------------------------------------------------------
+      # Docker container CPU > 150% of one CPU
+      # ----------------------------------------------------------
+      - alert: DockerContainerCPUCritical
+        expr: |
+          rate(
+            container_cpu_usage_seconds_total{
+              job="docker",
+              name!="docker-exporter"
+            }[5m]
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: critical
+          service: docker
+          component: cpu
+        annotations:
+          summary: "CONTAINER CPU CRITICAL"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is using more than 1.5 CPU cores for 10 minutes."
+
+      # ----------------------------------------------------------
+      # Docker container memory > 80%
+      #
+      # Ignore containers without a memory limit.
+      # ----------------------------------------------------------
+      - alert: DockerContainerMemoryHigh
+        expr: |
+          (
+            container_memory_working_set_bytes{
+              job="docker",
+              name!="docker-exporter"
+            }
+            /
+            container_memory_limit_bytes{
+              job="docker",
+              name!="docker-exporter"
+            }
+          ) > 0.80
+          and
+          container_memory_limit_bytes{
+            job="docker",
+            name!="docker-exporter"
+          } > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: docker
+          component: memory
+        annotations:
+          summary: "CONTAINER MEMORY HIGH"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is using more than 80% of its memory limit."
+
+      # ----------------------------------------------------------
+      # Docker container memory > 95%
+      #
+      # Ignore containers without a memory limit.
+      # ----------------------------------------------------------
+      - alert: DockerContainerMemoryCritical
+        expr: |
+          (
+            container_memory_working_set_bytes{
+              job="docker",
+              name!="docker-exporter"
+            }
+            /
+            container_memory_limit_bytes{
+              job="docker",
+              name!="docker-exporter"
+            }
+          ) > 0.95
+          and
+          container_memory_limit_bytes{
+            job="docker",
+            name!="docker-exporter"
+          } > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: docker
+          component: memory
+        annotations:
+          summary: "CONTAINER MEMORY CRITICAL"
+          description: "Container {{ $labels.name }} on LXC {{ $labels.lxc }} is using more than 95% of its memory limit."
