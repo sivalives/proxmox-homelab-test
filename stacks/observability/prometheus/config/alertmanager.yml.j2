@@ -44,7 +44,7 @@ receivers:
   - name: 'multi-channel'
     webhook_configs:
       # ntfy (if using Bearer token)
-      - url: 'http://ntfy:80/homelab_alerts'
+      - url: 'http://ntfy:80/homelab_alerts?template=alertmanager'
         send_resolved: true
         http_config:
           authorization:
@@ -62,7 +62,7 @@ receivers:
   # Proxmox critical
   - name: 'proxmox-critical'
     webhook_configs:
-      - url: 'http://ntfy:80/proxmox_critical'
+      - url: 'http://ntfy:80/proxmox_critical?template=alertmanager'
         send_resolved: true
         http_config:
           authorization:
@@ -79,7 +79,7 @@ receivers:
   # Proxmox warning
   - name: 'proxmox-warning'
     webhook_configs:
-      - url: 'http://ntfy:80/proxmox_warning'
+      - url: 'http://ntfy:80/proxmox_warning?template=alertmanager'
         send_resolved: true
         http_config:
           authorization:
@@ -96,7 +96,7 @@ receivers:
   # System alerts
   - name: 'system-alerts'
     webhook_configs:
-      - url: 'http://ntfy:80/system_alerts'
+      - url: 'http://ntfy:80/system_alerts?template=alertmanager'
         send_resolved: true
         http_config:
           authorization:
