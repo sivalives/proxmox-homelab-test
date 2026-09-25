@@ -74,3 +74,52 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: 'alertmanager'
+      
+  - job_name: 'cadvisor'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - '192.168.1.101:18080'
+        labels:
+          lxc: 'openbao'
+
+      - targets:
+          - '192.168.1.102:18080'
+        labels:
+          lxc: 'splunk'
+
+      - targets:
+          - '192.168.1.103:18080'
+        labels:
+          lxc: 'immich'
+
+      - targets:
+          - '192.168.1.104:18080'
+        labels:
+          lxc: 'pihole'
+
+      - targets:
+          - '192.168.1.105:18080'
+        labels:
+          lxc: 'ai'
+
+      - targets:
+          - '192.168.1.106:18080'
+        labels:
+          lxc: 'dockership'
+
+      - targets:
+          - '192.168.1.107:18080'
+        labels:
+          lxc: 'jellyfin'
+
+      - targets:
+          - '192.168.1.108:18080'
+        labels:
+          lxc: 'observability'
+
+      - targets:
+          - '192.168.1.110:18080'
+        labels:
+          lxc: 'controller'
