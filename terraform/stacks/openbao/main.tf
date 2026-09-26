@@ -23,4 +23,7 @@ module "openbao" {
   timezone                       = var.timezone
   controller_ssh_public_key_file = var.controller_ssh_public_key_file
   mount_points                   = var.mount_points
+  proxmox_ssh_host               = var.proxmox_ssh_host
+  proxmox_ssh_private_key_file   = var.proxmox_ssh_private_key_file
+
 }
