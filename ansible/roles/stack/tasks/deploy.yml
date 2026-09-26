@@ -156,7 +156,7 @@
     secrets: "{{ app_secrets | default({}) }}"   # keep alias if your templates use it
   when: env_template.stat.exists
   register: env_rendered
-  no_log: true                                   # recommended – contains secrets
+  no_log: false
 
 - name: Display .env file rendered
   ansible.builtin.debug:
@@ -196,7 +196,7 @@
     app_secrets: "{{ app_secrets | default({}) }}"
     shared_secrets: "{{ shared_secrets | default({}) }}"
     secrets: "{{ app_secrets | default({}) }}"
-  no_log: true
+  no_log: false
     
 # -------------------------------------------------------------------
 # Deploy with Docker Compose
