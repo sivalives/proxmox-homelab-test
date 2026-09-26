@@ -69,9 +69,9 @@ resource "proxmox_virtual_environment_container" "this" {
   # All LXCs run Docker
   #
   unprivileged = false
-  
-  #This is set to false for Immich 
-  start_on_boot = false
+
+  #To have all LXC start restart of Proxmox server itself
+  start_on_boot = true
 
   startup {
     order    = 1
