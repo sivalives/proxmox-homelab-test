@@ -14,7 +14,6 @@ ROOT_DIR := $(CURDIR)
 
 TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
 OPENBAO_DIR := $(ROOT_DIR)/stacks/openbao
-OPENBAO_SCRIPTS_DIR := $(OPENBAO_DIR)/scripts
 BOOTSTRAP_DIR := $(OPENBAO_DIR)/bootstrap
 
 ANSIBLE_DIR := $(ROOT_DIR)/ansible
@@ -90,16 +89,17 @@ bootstrap:
 # OpenBao Server - Full First-Time Setup
 # -------------------------------------------------------------------
 #
-# Runs every step needed to go from a fresh OpenBao container to a
-# ready-to-use server, in order:
+# The old numbered shell scripts (00-fix-permissions, 01-bootstrap,
+# 03-setup-secrets) have been replaced by the openbao_server Ansible
+# role - it covers all three phases (permissions, init/unseal/
+# policies/ui-admin, placeholder secrets) in one idempotent run.
 #
-#   1. Fix data/config/policy directory permissions
-#   2. Initialize, unseal, enable KV+auth, load policies, create the
-#      UI admin user
-#   3. Create placeholder secrets (existing values are NEVER touched)
+# Adjust ANSIBLE_DIR/playbooks/openbao-setup.yml below if you named
+# the playbook differently when you copied it into this repo, and
+# make sure it targets the right inventory group for your OpenBao
+# server host.
 #
-# Run this ONCE per OpenBao server, from its host.
-# Safe to re-run: every step below is idempotent on its own.
+# Run this ONCE per OpenBao server. Safe to re-run.
 # -------------------------------------------------------------------
 
 openbao-setup:
@@ -108,14 +108,7 @@ openbao-setup:
 	@echo " OpenBao Server - Full First-Time Setup"
 	@echo "=================================================="
 	@echo ""
-	@echo ">>> Step 1/3: Fix data/config/policy permissions"
-	cd $(OPENBAO_SCRIPTS_DIR) && ./00-openbao-server-fix-permissions.sh
-	@echo ""
-	@echo ">>> Step 2/3: Initialize / unseal / configure OpenBao"
-	cd $(OPENBAO_SCRIPTS_DIR) && ./01-openbao-server-bootstrap.sh
-	@echo ""
-	@echo ">>> Step 3/3: Create placeholder secrets"
-	cd $(OPENBAO_SCRIPTS_DIR) && ./03-openbao-setup-secrets.sh
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-setup.yml
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao first-time setup complete"
