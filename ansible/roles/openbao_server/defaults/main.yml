@@ -1,0 +1,20 @@
+---
+approle_token_ttl:     "1h"
+approle_token_max_ttl: "4h"
+secret_id_ttl:         "0"
+secret_id_num_uses:    "0"
+
+# Placeholder values written ONCE, the first time each secret is created.
+# Existing secrets are never overwritten by this role (same behaviour as
+# your old 03-openbao-setup-secrets.sh). Go change the CHANGE_ME_* values
+# in the UI right after bootstrap.
+openbao_shared_secrets:
+  SPLUNK_HEC_URL: "http://192.168.1.102:8088"
+  SPLUNK_HEC_TOKEN: "CHANGE_ME_SPLUNK_HEC_TOKEN"
+
+openbao_stack_secrets:
+  splunk:
+    SPLUNK_PASSWORD: "CHANGE_ME_SPLUNK_PASSWORD"
+    SPLUNK_HEC_TOKEN: "CHANGE_ME_SPLUNK_HEC_TOKEN"
+  pihole:
+    PIHOLE_PASSWORD: "CHANGE_ME_PIHOLE_PASSWORD"

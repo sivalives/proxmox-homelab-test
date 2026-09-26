@@ -1,0 +1,7 @@
+---
+# Passed in per-host by playbooks/03-deploy-agent.yml:
+#   openbao_role_id / openbao_secret_id   - the AppRole credentials
+#   openbao_stack                          - which stack this LXC is (splunk, pihole, ...)
+openbao_agent_creds_dir: /var/lib/openbao
+openbao_agent_config_dir: /etc/openbao-agent
+openbao_agent_server_addr: "http://192.168.1.106:8200"  # the OpenBao server LXC

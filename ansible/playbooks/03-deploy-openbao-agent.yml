@@ -1,0 +1,30 @@
+---
+# Install the bao CLI + bao-agent + AppRole credentials on a new LXC,
+# for a stack that's already been bootstrapped on the OpenBao server
+# (i.e. it's in group_vars/all.yml's openbao_app_stacks, or you ran
+# 02-add-app.yml for it) - so its role-id/secret-id already exist
+# under files/bootstrap/<stack>/ on this controller.
+#
+# Run:
+#   ansible-playbook playbooks/03-deploy-agent.yml -l <lxc-host-in-inventory>
+
+- name: Deploy OpenBao agent to an LXC
+  hosts: openbao_agents
+  become: true
+  gather_facts: false
+
+  vars_prompt:
+    - name: target_stack
+      prompt: "Which stack is this LXC for? (must match a folder under files/bootstrap/)"
+      private: false
+
+  pre_tasks:
+    - name: Load this stack's AppRole credentials from the controller
+      ansible.builtin.set_fact:
+        openbao_role_id: "{{ lookup('file', playbook_dir + '/../files/bootstrap/' + target_stack + '/role-id') }}"
+        openbao_secret_id: "{{ lookup('file', playbook_dir + '/../files/bootstrap/' + target_stack + '/secret-id') }}"
+        openbao_stack: "{{ target_stack }}"
+      no_log: true
+
+  roles:
+    - openbao_agent

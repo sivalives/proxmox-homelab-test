@@ -1,0 +1,170 @@
+---
+# Add a new application to OpenBao that you DON'T want as a permanent
+# entry in group_vars/all.yml's openbao_app_stacks list (e.g. a
+# one-off test app). For anything long-lived, prefer adding it to
+# openbao_app_stacks and re-running 01-setup-openbao-server.yml
+# instead - one less place to remember it exists.
+#
+# Reuses the exact same policy template as every other stack
+# (roles/openbao_server/templates/policies/app-policy.hcl.j2) so there
+# is still only ONE place that defines what an app policy looks like.
+#
+# Run:
+#   ansible-playbook playbooks/02-add-app.yml
+
+- name: Add a new application to OpenBao
+  hosts: openbao
+  become: true
+  gather_facts: false
+
+  vars_prompt:
+    - name: lxc_name
+      prompt: "LXC container name this app runs on (e.g. lxc107)"
+      private: false
+    - name: app_name
+      prompt: "Application/stack name (lowercase, hyphens ok - this becomes the policy/secret path)"
+      private: false
+    - name: openbao_admin_token
+      prompt: "OpenBao root token"
+      private: true
+    - name: include_shared_policy
+      prompt: "Attach shared-policy too? (yes/no)"
+      private: false
+      default: "yes"
+    - name: app_secrets_input
+      prompt: "Initial secrets as KEY=VALUE,KEY2=VALUE2 (leave empty to add them later in the UI)"
+      private: true
+      default: ""
+    - name: force_regenerate
+      prompt: "Force-regenerate the AppRole Secret ID if one already exists? (yes/no)"
+      private: false
+      default: "no"
+
+  pre_tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that:
+          - lxc_name is match('^[a-z0-9]+(-[a-z0-9]+)*$')
+          - app_name is match('^[a-z0-9][a-z0-9-]*$')
+          - include_shared_policy | lower in ['yes', 'no', 'true', 'false']
+        fail_msg: "Invalid lxc_name, app_name, or include_shared_policy value."
+
+    - name: Compute flags
+      ansible.builtin.set_fact:
+        include_shared: "{{ include_shared_policy | lower in ['yes', 'true'] }}"
+        do_force_regenerate: "{{ force_regenerate | lower in ['yes', 'true'] }}"
+        bootstrap_folder: "{{ lxc_name }}-{{ app_name }}"
+
+    - name: Parse KEY=VALUE secrets input into a dict
+      ansible.builtin.set_fact:
+        app_secret_data: "{{ app_secret_data | default({}) | combine({item.split('=', 1)[0]: item.split('=', 1)[1]}) }}"
+      loop: "{{ app_secrets_input.split(',') | map('trim') | reject('equalto', '') | list }}"
+      when: app_secrets_input | trim | length > 0
+      no_log: true
+
+  tasks:
+    - name: Check OpenBao container is running
+      ansible.builtin.command:
+        argv: [docker, inspect, -f, "{{ '{{.State.Running}}' }}", "{{ openbao_container }}"]
+      register: container_status
+      changed_when: false
+      failed_when: container_status.rc != 0 or container_status.stdout | trim != "true"
+
+    - name: Build reusable 'docker exec bao ...' prefix
+      ansible.builtin.set_fact:
+        bao_exec: "{{ ['docker', 'exec', '-e', 'BAO_ADDR=' + openbao_addr, '-e', 'BAO_TOKEN=' + openbao_admin_token, openbao_container, 'bao'] }}"
+      no_log: true
+
+    - name: Confirm OpenBao is unsealed and ready
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['status', '-format=json'] }}"
+      register: bao_status
+      changed_when: false
+      failed_when: >-
+        (bao_status.stdout | from_json).initialized | default(false) | bool == false
+        or (bao_status.stdout | from_json).sealed | default(true) | bool == true
+
+    - name: Render policy file for this app (SAME template every stack uses)
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/openbao_server/templates/policies/app-policy.hcl.j2"
+        dest: "{{ openbao_policies_dir }}/{{ app_name }}-policy.hcl"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        stack: "{{ app_name }}"
+
+    - name: Load the policy into OpenBao
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['policy', 'write', app_name + '-policy', '/openbao/policies/' + app_name + '-policy.hcl'] }}"
+      changed_when: true
+
+    - name: Create/update the secret (only if secrets were supplied)
+      ansible.builtin.command:
+        argv: >-
+          {{
+            bao_exec + ['kv', 'put', kv_mount + '/' + app_name] +
+            (app_secret_data | dict2items | map(attribute='key')
+              | zip(app_secret_data | dict2items | map(attribute='value'))
+              | map('join', '=') | list)
+          }}
+      when: app_secret_data | default({}) | length > 0
+      no_log: true
+      changed_when: true
+
+    - name: Create the AppRole
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['write', 'auth/approle/role/' + app_name,
+                  'token_policies=' + app_name + '-policy' + (',shared-policy' if include_shared else ''),
+                  'token_ttl=1h', 'token_max_ttl=4h',
+                  'secret_id_ttl=0', 'secret_id_num_uses=0'] }}"
+      changed_when: true
+
+    - name: Force-delete the Secret ID if regenerating
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['write', '-f', 'auth/approle/role/' + app_name + '/secret-id/destroy'] }}"
+      when: do_force_regenerate
+      changed_when: true
+      failed_when: false
+
+    - name: Read Role ID
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['read', '-field=role_id', 'auth/approle/role/' + app_name + '/role-id'] }}"
+      register: role_id
+      changed_when: false
+
+    - name: Generate Secret ID
+      ansible.builtin.command:
+        argv: "{{ bao_exec + ['write', '-field=secret_id', '-f', 'auth/approle/role/' + app_name + '/secret-id'] }}"
+      register: secret_id
+      changed_when: true
+      no_log: true
+
+    - name: Create bootstrap folder on the controller
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../files/bootstrap/{{ bootstrap_folder }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Stage Role ID / Secret ID on the controller
+      ansible.builtin.copy:
+        content: "{{ item.content }}\n"
+        dest: "{{ playbook_dir }}/../files/bootstrap/{{ bootstrap_folder }}/{{ item.name }}"
+        mode: "0600"
+      loop:
+        - { name: role-id, content: "{{ role_id.stdout }}" }
+        - { name: secret-id, content: "{{ secret_id.stdout }}" }
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "App added: {{ app_name }}"
+          - "Policy:    {{ app_name }}-policy (shared-policy attached: {{ include_shared }})"
+          - "Secret:    {{ kv_mount }}/{{ app_name }}"
+          - "Credentials staged at files/bootstrap/{{ bootstrap_folder }}/"
+          - "UI: {{ openbao_ui_url }}"

@@ -1,0 +1,109 @@
+---
+# Equivalent of Phase 1 (Initialize) + Phase 2 (Unseal) from
+# 01-openbao-server-bootstrap.sh, but automated: on a first-ever run
+# we generate the unseal keys/root token AND unseal in the same play,
+# instead of you re-typing 3 keys by hand.
+
+- name: Read current OpenBao status
+  ansible.builtin.command:
+    argv: [docker, exec, "{{ openbao_container }}", bao, status, -format=json]
+  register: bao_status_raw
+  changed_when: false
+  failed_when: false
+
+- name: Parse status JSON
+  ansible.builtin.set_fact:
+    bao_status: "{{ bao_status_raw.stdout | from_json }}"
+  when: bao_status_raw.stdout | default('') | trim | length > 0
+
+- name: First-ever run - initialize OpenBao
+  when: not (bao_status.initialized | default(false))
+  block:
+    - name: Run 'bao operator init' (5 key shares, threshold 3)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - "{{ openbao_container }}"
+          - bao
+          - operator
+          - init
+          - "-key-shares=5"
+          - "-key-threshold=3"
+          - "-format=json"
+      register: bao_init
+      no_log: true
+
+    - name: Parse init output
+      ansible.builtin.set_fact:
+        bao_init_data: "{{ bao_init.stdout | from_json }}"
+      no_log: true
+
+    - name: Save root token + unseal keys to the controller
+      ansible.builtin.copy:
+        content: "{{ bao_init.stdout }}"
+        dest: "{{ playbook_dir }}/../files/bootstrap/{{ inventory_hostname }}-init.json"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: IMPORTANT - what just happened
+      ansible.builtin.debug:
+        msg:
+          - "OpenBao was initialized for the first time."
+          - "Root token + 5 unseal keys were written to:"
+          - "files/bootstrap/{{ inventory_hostname }}-init.json (mode 0600, on the controller)"
+          - "Move this file into a password manager or 'ansible-vault encrypt' it,"
+          - "then delete the plaintext copy. Anyone with 3 of the 5 keys plus"
+          - "this file can unseal and fully administer OpenBao."
+
+    - name: Unseal using 3 of the freshly generated keys
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ openbao_container }}", bao, operator, unseal, "{{ item }}"]
+      loop: "{{ bao_init_data.unseal_keys_b64[:3] }}"
+      no_log: true
+      changed_when: true
+
+- name: Subsequent run - check whether OpenBao needs a manual unseal
+  when: bao_status.initialized | default(false)
+  block:
+    - name: Re-read status (in case it was stale)
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ openbao_container }}", bao, status, -format=json]
+      register: bao_status_raw2
+      changed_when: false
+      failed_when: false
+
+    - name: Parse status JSON
+      ansible.builtin.set_fact:
+        bao_status: "{{ bao_status_raw2.stdout | from_json }}"
+
+    - name: Prompt for unseal keys if sealed (already-initialized case)
+      when: bao_status.sealed | default(true)
+      block:
+        - name: Ask for 3 unseal keys
+          ansible.builtin.pause:
+            prompt: "Enter unseal key {{ item }} of 3 (input hidden)"
+            echo: false
+          loop: [1, 2, 3]
+          register: unseal_prompts
+          no_log: true
+
+        - name: Submit unseal keys
+          ansible.builtin.command:
+            argv: [docker, exec, "{{ openbao_container }}", bao, operator, unseal, "{{ item.user_input }}"]
+          loop: "{{ unseal_prompts.results }}"
+          no_log: true
+          changed_when: true
+
+- name: Final seal-status check
+  ansible.builtin.command:
+    argv: [docker, exec, "{{ openbao_container }}", bao, status, -format=json]
+  register: bao_status_final
+  changed_when: false
+
+- name: Fail loudly if still sealed
+  ansible.builtin.fail:
+    msg: "OpenBao is still sealed - cannot continue with policies/secrets setup."
+  when: (bao_status_final.stdout | from_json).sealed | default(true)

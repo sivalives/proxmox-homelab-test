@@ -1,0 +1,23 @@
+# ============================================================
+# Policy: shared-policy
+# Read-only access to secrets shared across every stack
+# (e.g. SPLUNK_HEC_URL/TOKEN used by more than one log shipper).
+# Kept separate from app-policy.hcl.j2 on purpose — this one is
+# attached to every AppRole in addition to its own stack policy.
+# ============================================================
+
+path "{{ kv_mount }}/data/shared" {
+  capabilities = ["read"]
+}
+
+path "{{ kv_mount }}/data/shared/*" {
+  capabilities = ["read"]
+}
+
+path "{{ kv_mount }}/metadata/shared" {
+  capabilities = ["read", "list"]
+}
+
+path "{{ kv_mount }}/metadata/shared/*" {
+  capabilities = ["read", "list"]
+}

@@ -1,7 +1,0 @@
-# ansible/roles/openbao-agent/defaults/main.yml
----
-# OpenBao Agent Configuration Defaults
-
-enable_openbao_agent: false
-openbao_role_id: ""
-openbao_secret_id: ""

@@ -1,0 +1,26 @@
+# ============================================================
+# Policy: {{ stack }}-policy
+# Managed by Ansible — this ONE template generates the policy for
+# every stack (splunk, ai, dockership, observability, pihole, ...).
+# To change what stacks can do, edit this file — not each stack's
+# copy — then re-run the policies tag.
+#
+# Read-only access to this stack's own secrets/metadata.
+# Combine with shared-policy for the shared-secrets read access.
+# ============================================================
+
+path "{{ kv_mount }}/data/{{ stack }}" {
+  capabilities = ["read"]
+}
+
+path "{{ kv_mount }}/data/{{ stack }}/*" {
+  capabilities = ["read"]
+}
+
+path "{{ kv_mount }}/metadata/{{ stack }}" {
+  capabilities = ["read", "list"]
+}
+
+path "{{ kv_mount }}/metadata/{{ stack }}/*" {
+  capabilities = ["read", "list"]
+}

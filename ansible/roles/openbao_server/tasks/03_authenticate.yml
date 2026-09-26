@@ -1,0 +1,37 @@
+---
+# Uses the root token from a fresh 'operator init' (this run) if we have
+# one, otherwise falls back to openbao_admin_token supplied via
+# vars_prompt in the playbook. We never run 'bao login' (which would
+# write the token to the container's token-helper file) - instead every
+# later task passes the token explicitly via 'bao_exec', so nothing
+# long-lived is stored inside the container.
+
+- name: Pick the active root token
+  ansible.builtin.set_fact:
+    _active_root_token: "{{ bao_init_data.root_token | default(openbao_admin_token | default('')) }}"
+  no_log: true
+
+- name: Fail with a clear message if we have no token to use
+  ansible.builtin.fail:
+    msg: >
+      No root token available. Supply one via the 'openbao_admin_token'
+      vars_prompt when OpenBao was already initialized in a previous run.
+  when: _active_root_token | length == 0
+
+- name: Build the reusable 'docker exec bao ...' prefix (auth baked in)
+  ansible.builtin.set_fact:
+    bao_exec: "{{ ['docker', 'exec', '-e', 'BAO_ADDR=' + openbao_addr, '-e', 'BAO_TOKEN=' + _active_root_token, openbao_container, 'bao'] }}"
+  no_log: true
+
+- name: Verify the token actually works
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['token', 'lookup'] }}"
+  register: token_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Fail if authentication did not work
+  ansible.builtin.fail:
+    msg: "Could not authenticate to OpenBao with the token provided."
+  when: token_check.rc != 0

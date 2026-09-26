@@ -1,0 +1,14 @@
+# Managed by Ansible (role: openbao_server) — do not edit by hand.
+storage "raft" {
+  path    = "/openbao/data"
+  node_id = "{{ inventory_hostname }}"
+}
+
+listener "tcp" {
+  address     = "0.0.0.0:8200"
+  tls_disable = "true"
+}
+
+api_addr     = "{{ openbao_addr }}"
+cluster_addr = "https://{{ ansible_host | default(inventory_hostname) }}:8201"
+ui           = true

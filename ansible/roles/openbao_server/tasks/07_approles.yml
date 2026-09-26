@@ -1,0 +1,76 @@
+---
+- name: Create/update AppRole per stack (own policy + shared-policy)
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['write', 'auth/approle/role/' + item,
+              'token_policies=' + item + '-policy,shared-policy',
+              'token_ttl=' + approle_token_ttl,
+              'token_max_ttl=' + approle_token_max_ttl,
+              'secret_id_ttl=' + secret_id_ttl,
+              'secret_id_num_uses=' + secret_id_num_uses] }}"
+  loop: "{{ openbao_app_stacks }}"
+  changed_when: true
+
+- name: Read Role ID for each stack
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['read', '-field=role_id', 'auth/approle/role/' + item + '/role-id'] }}"
+  loop: "{{ openbao_app_stacks }}"
+  register: role_ids
+  changed_when: false
+
+- name: Create per-stack bootstrap directories (server-side)
+  ansible.builtin.file:
+    path: "{{ openbao_bootstrap_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ agent_uid }}"
+    group: "{{ agent_gid }}"
+    mode: "0700"
+  loop: "{{ openbao_app_stacks }}"
+
+- name: Write Role ID files (server-side)
+  ansible.builtin.copy:
+    content: "{{ item.stdout }}\n"
+    dest: "{{ openbao_bootstrap_dir }}/{{ item.item }}/role-id"
+    owner: "{{ agent_uid }}"
+    group: "{{ agent_gid }}"
+    mode: "0600"
+  loop: "{{ role_ids.results }}"
+
+- name: Check whether a Secret ID already exists for each stack (never regenerate silently)
+  ansible.builtin.stat:
+    path: "{{ openbao_bootstrap_dir }}/{{ item }}/secret-id"
+  loop: "{{ openbao_app_stacks }}"
+  register: secret_id_files
+
+- name: Generate a Secret ID only where one doesn't already exist
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['write', '-field=secret_id', '-f', 'auth/approle/role/' + item.item + '/secret-id'] }}"
+  loop: "{{ secret_id_files.results }}"
+  when: not item.stat.exists
+  register: secret_ids
+  no_log: true
+  changed_when: true
+
+- name: Write newly generated Secret ID files (server-side)
+  ansible.builtin.copy:
+    content: "{{ item.stdout }}\n"
+    dest: "{{ openbao_bootstrap_dir }}/{{ item.item.item }}/secret-id"
+    owner: "{{ agent_uid }}"
+    group: "{{ agent_gid }}"
+    mode: "0600"
+  loop: "{{ secret_ids.results }}"
+  when: not item.skipped | default(false)
+  no_log: true
+
+# ------------------------------------------------------------
+# Pull role-id/secret-id back to the controller so
+# playbooks/03-deploy-agent.yml can hand them to any LXC without
+# you manually copying files around.
+# ------------------------------------------------------------
+
+- name: Fetch Role ID / Secret ID back to the controller
+  ansible.builtin.fetch:
+    src: "{{ openbao_bootstrap_dir }}/{{ item.0 }}/{{ item.1 }}"
+    dest: "{{ playbook_dir }}/../files/bootstrap/{{ item.0 }}/{{ item.1 }}"
+    flat: true
+  loop: "{{ openbao_app_stacks | product(['role-id', 'secret-id']) | list }}"
+  no_log: true

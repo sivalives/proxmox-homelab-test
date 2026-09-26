@@ -1,0 +1,129 @@
+---
+# Adapted from your existing main.yml. Same binary-install approach;
+# adds a real bao-agent service + config so secrets actually get
+# fetched onto the LXC, not just the CLI + credentials.
+
+- name: Install OpenBao agent dependencies
+  ansible.builtin.apt:
+    name: [curl, ca-certificates, tar]
+    state: present
+    update_cache: true
+  become: true
+
+- name: Create temporary download directory
+  ansible.builtin.file:
+    path: /var/tmp/openbao-install
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Download OpenBao release
+  ansible.builtin.get_url:
+    url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.tar.gz"
+    dest: "/var/tmp/openbao-install/openbao.tar.gz"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Extract OpenBao
+  ansible.builtin.unarchive:
+    src: "/var/tmp/openbao-install/openbao.tar.gz"
+    dest: "/var/tmp/openbao-install"
+    remote_src: true
+    creates: "/var/tmp/openbao-install/bao"
+  become: true
+
+- name: Install the 'bao' CLI (also used by the agent service)
+  ansible.builtin.copy:
+    src: "/var/tmp/openbao-install/bao"
+    dest: "/usr/local/bin/bao"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  become: true
+
+- name: Verify installation
+  ansible.builtin.command:
+    cmd: /usr/local/bin/bao version
+  register: bao_version_output
+  changed_when: false
+
+- name: Show installed version
+  ansible.builtin.debug:
+    msg: "{{ bao_version_output.stdout }}"
+
+- name: Remove temporary install files
+  ansible.builtin.file:
+    path: /var/tmp/openbao-install
+    state: absent
+  become: true
+
+- name: Create credentials directory
+  ansible.builtin.file:
+    path: "{{ openbao_agent_creds_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Stage Role ID
+  ansible.builtin.copy:
+    content: "{{ openbao_role_id }}\n"
+    dest: "{{ openbao_agent_creds_dir }}/role-id"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Stage Secret ID
+  ansible.builtin.copy:
+    content: "{{ openbao_secret_id }}\n"
+    dest: "{{ openbao_agent_creds_dir }}/secret-id"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Create agent config directory
+  ansible.builtin.file:
+    path: "{{ openbao_agent_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Render bao agent config
+  ansible.builtin.template:
+    src: agent.hcl.j2
+    dest: "{{ openbao_agent_config_dir }}/agent.hcl"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: restart openbao-agent
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: openbao-agent.service.j2
+    dest: /etc/systemd/system/openbao-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: restart openbao-agent
+
+- name: Enable and start openbao-agent
+  ansible.builtin.systemd:
+    name: openbao-agent
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

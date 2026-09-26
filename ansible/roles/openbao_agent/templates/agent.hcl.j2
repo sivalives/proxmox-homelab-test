@@ -1,0 +1,30 @@
+# Managed by Ansible (role: openbao_agent) — do not edit by hand.
+pid_file = "/run/openbao-agent.pid"
+
+vault {
+  address = "{{ openbao_agent_server_addr }}"
+}
+
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+    config = {
+      role_id_file_path   = "{{ openbao_agent_creds_dir }}/role-id"
+      secret_id_file_path = "{{ openbao_agent_creds_dir }}/secret-id"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "{{ openbao_agent_creds_dir }}/token"
+    }
+  }
+}
+
+# ------------------------------------------------------------
+# Add a 'template' block per secret file this app needs, reading from
+# secret/data/{{ openbao_stack | default('<stack>') }} - see the
+# OpenBao Agent docs for the exact consul-template syntax. Left out of
+# the live config here so this file is always valid HCL out of the box.
+# ------------------------------------------------------------

@@ -1,0 +1,51 @@
+---
+# ============================================================
+# Global OpenBao settings
+# Change these in ONE place; every role/playbook reads from here.
+# ============================================================
+
+# NEW base directory (was /opt/homelab/stacks/openbao)
+openbao_base_dir:      /opt/openbao-data
+openbao_config_dir:    "{{ openbao_base_dir }}/config"
+openbao_data_dir:      "{{ openbao_base_dir }}/data"
+openbao_policies_dir:  "{{ openbao_base_dir }}/policies"
+openbao_bootstrap_dir: "{{ openbao_base_dir }}/bootstrap"
+
+openbao_container: openbao
+openbao_addr:      "http://127.0.0.1:8200"
+openbao_version:   "2.6.2"
+
+# Used only for human-readable messages / summaries, not for API calls.
+openbao_ui_url: "http://192.168.1.106:8200/ui/"
+
+openbao_uid: 100
+openbao_gid: 1000
+agent_uid:   100
+agent_gid:   1000
+
+kv_mount:      secret
+ui_admin_user: siva
+
+# ------------------------------------------------------------
+# Every stack in this list gets:
+#   - a "<stack>-policy" policy (from the ONE shared template)
+#   - an AppRole (auth/approle/role/<stack>)
+#   - a role-id/secret-id pair under openbao_bootstrap_dir/<stack>/
+#
+# To onboard a new stack that just needs the standard read-only
+# "read my own secrets + shared secrets" policy: add its name here
+# and re-run playbooks/01-setup-openbao-server.yml (tags: policies,approles).
+#
+# For a one-off app you don't want in this permanent list, use
+# playbooks/02-add-app.yml instead.
+# ------------------------------------------------------------
+openbao_app_stacks:
+  - splunk
+  - ai
+  - dockership
+  - observability
+  - pihole
+  - immich
+  - jellyfin
+  - observability
+  - openbao

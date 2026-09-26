@@ -1,0 +1,31 @@
+---
+# Phases mirror your old numbered scripts (00-03), just split into
+# tagged files so you can re-run only the part you need, e.g.:
+#   ansible-playbook playbooks/01-setup-openbao-server.yml --tags policies,approles
+
+- import_tasks: 00_directories.yml
+  tags: [directories]
+
+- import_tasks: 01_deploy.yml
+  tags: [deploy]
+
+- import_tasks: 02_initialize_and_unseal.yml
+  tags: [initialize, unseal]
+
+- import_tasks: 03_authenticate.yml
+  tags: [authenticate, infrastructure, policies, ui-admin, approles, secrets]
+
+- import_tasks: 04_infrastructure.yml
+  tags: [infrastructure]
+
+- import_tasks: 05_policies.yml
+  tags: [policies]
+
+- import_tasks: 06_ui_admin.yml
+  tags: [ui-admin]
+
+- import_tasks: 07_approles.yml
+  tags: [approles]
+
+- import_tasks: 08_secrets.yml
+  tags: [secrets]

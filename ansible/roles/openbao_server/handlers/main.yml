@@ -1,0 +1,6 @@
+---
+- name: restart openbao
+  ansible.builtin.command:
+    cmd: docker compose up -d --force-recreate
+    chdir: "{{ openbao_base_dir }}"
+  listen: restart openbao

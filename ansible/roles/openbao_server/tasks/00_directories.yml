@@ -1,0 +1,31 @@
+---
+# Equivalent of 00-openbao-server-fix-permissions.sh, pointed at the
+# new base directory: /opt/openbao-data (was /opt/homelab/stacks/openbao)
+
+- name: Create base/config/policies directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ openbao_base_dir }}"
+    - "{{ openbao_config_dir }}"
+    - "{{ openbao_policies_dir }}"
+
+- name: Create Raft data directory (owned by the OpenBao container's UID/GID)
+  ansible.builtin.file:
+    path: "{{ openbao_data_dir }}"
+    state: directory
+    owner: "{{ openbao_uid }}"
+    group: "{{ openbao_gid }}"
+    mode: "0700"
+
+- name: Create bootstrap directory (holds generated role-id/secret-id files)
+  ansible.builtin.file:
+    path: "{{ openbao_bootstrap_dir }}"
+    state: directory
+    owner: "{{ agent_uid }}"
+    group: "{{ agent_gid }}"
+    mode: "0700"

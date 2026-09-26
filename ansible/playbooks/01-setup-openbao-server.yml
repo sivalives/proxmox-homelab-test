@@ -1,0 +1,26 @@
+---
+# First-time (and repeatable) OpenBao server setup.
+#
+# Run from the controller LXC:
+#   ansible-playbook playbooks/01-setup-openbao-server.yml
+#
+# On the very first run, leave openbao_admin_token empty - the role
+# initializes OpenBao itself and uses the freshly generated root token.
+# On later runs (e.g. adding a new stack to group_vars/all.yml) you'll
+# need to supply the root token, or scope with --tags:
+#   ansible-playbook playbooks/01-setup-openbao-server.yml \
+#     --tags policies,approles -e openbao_admin_token=s.xxxxx
+
+- name: Bootstrap the OpenBao server
+  hosts: openbao
+  become: true
+  gather_facts: true
+
+  vars_prompt:
+    - name: openbao_admin_token
+      prompt: "Root token (leave empty on the very first run)"
+      private: true
+      default: ""
+
+  roles:
+    - openbao_server

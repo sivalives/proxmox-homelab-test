@@ -1,0 +1,32 @@
+---
+# Equivalent of Phase 4 in 01-openbao-server-bootstrap.sh
+
+- name: List enabled secrets engines
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['secrets', 'list', '-format=json'] }}"
+  register: secrets_list
+  changed_when: false
+
+- name: Enable KV v2 at '{{ kv_mount }}/'
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['secrets', 'enable', '-path=' + kv_mount, 'kv-v2'] }}"
+  when: (kv_mount ~ '/') not in ((secrets_list.stdout | from_json).keys() | list)
+  changed_when: true
+
+- name: List enabled auth methods
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['auth', 'list', '-format=json'] }}"
+  register: auth_list
+  changed_when: false
+
+- name: Enable AppRole auth
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['auth', 'enable', 'approle'] }}"
+  when: "'approle/' not in ((auth_list.stdout | from_json).keys() | list)"
+  changed_when: true
+
+- name: Enable userpass auth (used for the UI admin account)
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['auth', 'enable', 'userpass'] }}"
+  when: "'userpass/' not in ((auth_list.stdout | from_json).keys() | list)"
+  changed_when: true

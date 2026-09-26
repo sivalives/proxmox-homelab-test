@@ -1,0 +1,16 @@
+# Managed by Ansible (role: openbao_agent) — do not edit by hand.
+[Unit]
+Description=OpenBao Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/bao agent -config={{ openbao_agent_config_dir }}/agent.hcl
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

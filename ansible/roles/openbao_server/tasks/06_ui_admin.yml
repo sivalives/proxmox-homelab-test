@@ -1,0 +1,45 @@
+---
+# Fixes the "can't see secrets in the UI" bug: the old script assigned
+# token_policies="ui-admin" to the account but never created that
+# policy, so the account had no real access. This creates it and makes
+# sure the account is attached to it, even on existing installs.
+
+- name: Render ui-admin-policy.hcl
+  ansible.builtin.template:
+    src: policies/ui-admin-policy.hcl.j2
+    dest: "{{ openbao_policies_dir }}/ui-admin-policy.hcl"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load ui-admin policy into OpenBao
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['policy', 'write', 'ui-admin', '/openbao/policies/ui-admin-policy.hcl'] }}"
+  changed_when: true
+
+- name: Check whether the UI admin user already exists
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['read', 'auth/userpass/users/' + ui_admin_user] }}"
+  register: ui_admin_check
+  changed_when: false
+  failed_when: false
+
+- name: Prompt for a password (first time creating this user only)
+  ansible.builtin.pause:
+    prompt: "Set a password for OpenBao UI admin '{{ ui_admin_user }}'"
+    echo: false
+  register: ui_admin_password_prompt
+  when: ui_admin_check.rc != 0
+
+- name: Create the UI admin user
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['write', 'auth/userpass/users/' + ui_admin_user, 'password=' + ui_admin_password_prompt.user_input, 'token_policies=ui-admin'] }}"
+  when: ui_admin_check.rc != 0
+  no_log: true
+  changed_when: true
+
+- name: Repair policy assignment on an already-existing user (idempotent re-runs / bugfix rollout)
+  ansible.builtin.command:
+    argv: "{{ bao_exec + ['write', 'auth/userpass/users/' + ui_admin_user, 'token_policies=ui-admin'] }}"
+  when: ui_admin_check.rc == 0
+  changed_when: true

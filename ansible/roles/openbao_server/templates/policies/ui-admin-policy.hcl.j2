@@ -1,0 +1,41 @@
+# ============================================================
+# Policy: ui-admin
+# Attached to the "{{ ui_admin_user }}" userpass account used to log
+# into the OpenBao UI.
+#
+# THE BUG THIS FIXES: your old bootstrap script created the user
+# with token_policies="ui-admin" but never created a policy named
+# "ui-admin" anywhere — so the account silently fell back to the
+# built-in "default" policy, which has no access to secret/*. That's
+# why secrets didn't show up in the UI. This file is that missing
+# policy.
+# ============================================================
+
+# Full manage access to the KV engine (browse, read, create, update,
+# delete, list — everything the UI's secrets screens need).
+path "{{ kv_mount }}/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+
+# KV v2 needs an explicit "list" on the metadata root to render the
+# top-level secret list in the UI; the wildcard above doesn't cover it.
+path "{{ kv_mount }}/metadata" {
+  capabilities = ["list"]
+}
+
+path "{{ kv_mount }}/metadata/*" {
+  capabilities = ["read", "list", "delete"]
+}
+
+# Lets the UI enumerate mounted secrets engines and draw the sidebar.
+path "sys/internal/ui/mounts" {
+  capabilities = ["read"]
+}
+
+path "sys/internal/ui/mounts/*" {
+  capabilities = ["read"]
+}
+
+path "sys/mounts" {
+  capabilities = ["read"]
+}

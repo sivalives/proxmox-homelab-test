@@ -1,0 +1,15 @@
+# Managed by Ansible (role: openbao_server) — do not edit by hand.
+services:
+  openbao:
+    image: openbao/openbao:{{ openbao_version }}
+    container_name: {{ openbao_container }}
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    volumes:
+      - {{ openbao_config_dir }}:/openbao/config:ro
+      - {{ openbao_data_dir }}:/openbao/data
+      - {{ openbao_policies_dir }}:/openbao/policies:ro
+    command: server -config=/openbao/config/openbao.hcl
