@@ -1,6 +1,7 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-app terraform-init plan apply destroy deploy cadvisor clean
+.PHONY: help bootstrap openbao-setup openbao-app openbao-agent \
+        terraform-init plan apply destroy deploy cadvisor clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -12,7 +13,9 @@ APP ?=
 ROOT_DIR := $(CURDIR)
 
 TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
-BOOTSTRAP_DIR := $(ROOT_DIR)/stacks/openbao/bootstrap
+OPENBAO_DIR := $(ROOT_DIR)/stacks/openbao
+OPENBAO_SCRIPTS_DIR := $(OPENBAO_DIR)/scripts
+BOOTSTRAP_DIR := $(OPENBAO_DIR)/bootstrap
 
 ANSIBLE_DIR := $(ROOT_DIR)/ansible
 ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
@@ -20,6 +23,23 @@ ANSIBLE_PLAYBOOK := ansible-playbook
 
 # Always run Ansible with the repository's configuration.
 export ANSIBLE_CONFIG
+
+# -------------------------------------------------------------------
+# Helper: fail with a message if a required variable is empty.
+# Usage inside a recipe:  $(call require,STACK,make plan STACK=<stack_name>)
+# -------------------------------------------------------------------
+
+define require
+	@if [ -z "$($(1))" ]; then \
+		echo "ERROR: $(1) required"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  $(2)"; \
+		echo ""; \
+		echo "See 'make help' for more examples."; \
+		exit 1; \
+	fi
+endef
 
 # -------------------------------------------------------------------
 # Help
@@ -35,12 +55,15 @@ help:
 	@echo "  make openbao-app APP=<app_name>"
 	@echo ""
 	@echo "Targets:"
-	@echo "  bootstrap                              One-time: Setup OpenBao server"
+	@echo "  openbao-setup                          One-time: full OpenBao server setup"
+	@echo "                                          (permissions, init/unseal, policies, secrets)"
+	@echo "  bootstrap                              (legacy) One-time OpenBao server setup"
 	@echo "  openbao-app APP=dockership            Create/update OpenBao app + AppRole"
+	@echo "  openbao-agent STACK=splunk            Install OpenBao CLI + AppRole creds for a stack"
 	@echo "  terraform-init                        Initialize all Terraform stacks"
 	@echo "  plan STACK=splunk                     Plan infrastructure changes"
 	@echo "  apply STACK=splunk                    Create/update infrastructure"
-	@echo "  deploy STACK=ai                       Full deployment of stack"
+	@echo "  deploy STACK=ai                       Full deployment of stack (includes agent install)"
 	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
 	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
 	@echo "  cadvisor                              Setup cAdvisor on all Docker hosts"
@@ -49,12 +72,58 @@ help:
 	@echo ""
 
 # -------------------------------------------------------------------
-# OpenBao Bootstrap
+# OpenBao Bootstrap (legacy - kept as-is, do not remove)
+# -------------------------------------------------------------------
+#
+# Pre-existing one-time setup target. Left untouched so anything that
+# already calls `make bootstrap` keeps working. For new/rebuilt
+# environments, prefer `make openbao-setup` below, which runs every
+# step (permissions, init/unseal, secrets) instead of just this one
+# script.
 # -------------------------------------------------------------------
 
 bootstrap:
 	@echo "Starting OpenBao Bootstrap..."
-	cd $(ROOT_DIR)/stacks/openbao && ./00-bootstrap-openbao.sh
+	cd $(OPENBAO_DIR) && ./00-bootstrap-openbao.sh
+
+# -------------------------------------------------------------------
+# OpenBao Server - Full First-Time Setup
+# -------------------------------------------------------------------
+#
+# Runs every step needed to go from a fresh OpenBao container to a
+# ready-to-use server, in order:
+#
+#   1. Fix data/config/policy directory permissions
+#   2. Initialize, unseal, enable KV+auth, load policies, create the
+#      UI admin user
+#   3. Create placeholder secrets (existing values are NEVER touched)
+#
+# Run this ONCE per OpenBao server, from its host.
+# Safe to re-run: every step below is idempotent on its own.
+# -------------------------------------------------------------------
+
+openbao-setup:
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao Server - Full First-Time Setup"
+	@echo "=================================================="
+	@echo ""
+	@echo ">>> Step 1/3: Fix data/config/policy permissions"
+	cd $(OPENBAO_SCRIPTS_DIR) && ./00-openbao-server-fix-permissions.sh
+	@echo ""
+	@echo ">>> Step 2/3: Initialize / unseal / configure OpenBao"
+	cd $(OPENBAO_SCRIPTS_DIR) && ./01-openbao-server-bootstrap.sh
+	@echo ""
+	@echo ">>> Step 3/3: Create placeholder secrets"
+	cd $(OPENBAO_SCRIPTS_DIR) && ./03-openbao-setup-secrets.sh
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao first-time setup complete"
+	@echo "=================================================="
+	@echo ""
+	@echo "Next: bootstrap each application's policy/secret/AppRole with:"
+	@echo "  make openbao-app APP=<app_name>"
+	@echo ""
 
 # -------------------------------------------------------------------
 # OpenBao Application Bootstrap
@@ -74,32 +143,64 @@ bootstrap:
 # -------------------------------------------------------------------
 
 openbao-app:
-	@if [ -z "$(APP)" ]; then \
-		echo "ERROR: APP required"; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  make openbao-app APP=<app_name>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make openbao-app APP=dockership"; \
-		echo "  make openbao-app APP=ai"; \
-		exit 1; \
-	fi
-
+	$(call require,APP,make openbao-app APP=<app_name>)
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao Application Bootstrap: $(APP)"
 	@echo "=================================================="
 	@echo ""
-
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app.yml \
 		-e app_name=$(APP)
-
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao application bootstrap complete: $(APP)"
 	@echo "=================================================="
 	@echo ""
+
+# -------------------------------------------------------------------
+# OpenBao Agent - install CLI + AppRole credentials for one stack
+# -------------------------------------------------------------------
+#
+# Standalone target so it can be run on its own (`make openbao-agent
+# STACK=splunk`) AND reused by `deploy` for every stack, instead of
+# duplicating the credential lookup in two places.
+#
+# Looks for staged credentials in either layout, so it works whether
+# they were created by the old lxc-prefixed flow or the current one:
+#   stacks/openbao/bootstrap/<stack>/role-id            (current)
+#   stacks/openbao/bootstrap/<lxc_name>-<stack>/role-id  (legacy)
+#
+# Skipped automatically for STACK=openbao (the server doesn't need
+# credentials to reach itself).
+# -------------------------------------------------------------------
+
+openbao-agent:
+	$(call require,STACK,make openbao-agent STACK=<stack_name>)
+	@if [ "$(STACK)" = "openbao" ]; then \
+		echo "OpenBao server - skipping agent credential setup"; \
+	else \
+		CRED_DIR=""; \
+		if [ -d "$(BOOTSTRAP_DIR)/$(STACK)" ]; then \
+			CRED_DIR="$(BOOTSTRAP_DIR)/$(STACK)"; \
+		else \
+			CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" 2>/dev/null | head -1); \
+		fi; \
+		if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ] || [ ! -f "$$CRED_DIR/secret-id" ]; then \
+			echo "ERROR: Bootstrap credentials not found for $(STACK)"; \
+			echo "Expected: $(BOOTSTRAP_DIR)/$(STACK)/ or $(BOOTSTRAP_DIR)/<lxc>-$(STACK)/"; \
+			echo ""; \
+			echo "Create/bootstrap the application first:"; \
+			echo "  make openbao-app APP=$(STACK)"; \
+			exit 1; \
+		fi; \
+		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
+		SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
+		echo "Using credentials from $$CRED_DIR"; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
+			-e stack_name=$(STACK) \
+			-e openbao_role_id="$$ROLE_ID" \
+			-e openbao_secret_id="$$SECRET_ID"; \
+	fi
 
 # -------------------------------------------------------------------
 # Terraform Initialization
@@ -117,7 +218,6 @@ terraform-init:
 	@echo " Initializing Terraform"
 	@echo "=================================================="
 	@echo ""
-
 	@for dir in $(TERRAFORM_DIR)/*; do \
 		if [ -d "$$dir" ]; then \
 			echo ">>> terraform init: $$dir"; \
@@ -125,7 +225,6 @@ terraform-init:
 			echo ""; \
 		fi; \
 	done
-
 	@echo "Terraform initialization complete."
 
 # -------------------------------------------------------------------
@@ -133,18 +232,7 @@ terraform-init:
 # -------------------------------------------------------------------
 
 plan: terraform-init
-	@if [ -z "$(STACK)" ]; then \
-		echo "ERROR: STACK required"; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  make plan STACK=<stack_name>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make plan STACK=ai"; \
-		echo "  make plan STACK=splunk"; \
-		exit 1; \
-	fi
-
+	$(call require,STACK,make plan STACK=<stack_name>)
 	@echo ""
 	@echo ">>> Terraform plan: $(STACK)"
 	(cd $(TERRAFORM_DIR)/$(STACK) && terraform plan)
@@ -154,18 +242,7 @@ plan: terraform-init
 # -------------------------------------------------------------------
 
 apply: terraform-init
-	@if [ -z "$(STACK)" ]; then \
-		echo "ERROR: STACK required"; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  make apply STACK=<stack_name>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make apply STACK=ai"; \
-		echo "  make apply STACK=splunk"; \
-		exit 1; \
-	fi
-
+	$(call require,STACK,make apply STACK=<stack_name>)
 	@echo ""
 	@echo ">>> Terraform apply: $(STACK)"
 	(cd $(TERRAFORM_DIR)/$(STACK) && terraform apply)
@@ -186,7 +263,7 @@ apply: terraform-init
 #      LXC bootstrap
 #      Docker setup
 #      Hawser setup
-#      OpenBao credentials
+#      OpenBao agent install (CLI + AppRole credentials, any stack)
 #      Tailscale setup
 #      Deploy all applications
 #
@@ -197,24 +274,10 @@ apply: terraform-init
 #    Runs ONLY:
 #      Git pull
 #      Deploy requested application
-#
 # -------------------------------------------------------------------
 
 deploy:
-	@if [ -z "$(STACK)" ]; then \
-		echo "ERROR: STACK required"; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  make deploy STACK=<stack_name>"; \
-		echo "  make deploy STACK=<stack_name> APP=<app_name>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make deploy STACK=ai"; \
-		echo "  make deploy STACK=ai APP=ollama"; \
-		echo "  make deploy STACK=dockership APP=dockhand"; \
-		exit 1; \
-	fi
-
+	$(call require,STACK,make deploy STACK=<stack_name> [APP=<app_name>])
 	@if [ -n "$(APP)" ]; then \
 		echo ""; \
 		echo "=================================================="; \
@@ -264,27 +327,8 @@ deploy:
 		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
 			-e stack_name=$(STACK); \
 		echo ""; \
-		echo ">>> Step 6/8: OpenBao CLI + credentials"; \
-		if [ "$(STACK)" = "openbao" ]; then \
-			echo "OpenBao server - skipping client credentials setup"; \
-		else \
-			CRED_DIR=$$(find $(BOOTSTRAP_DIR) -maxdepth 1 -type d -name "*-$(STACK)" | head -1); \
-			if [ -z "$$CRED_DIR" ] || [ ! -f "$$CRED_DIR/role-id" ] || [ ! -f "$$CRED_DIR/secret-id" ]; then \
-				echo "ERROR: Bootstrap credentials not found for $(STACK)"; \
-				echo "Expected: $(BOOTSTRAP_DIR)/<app>/ or $(BOOTSTRAP_DIR)/lxc*-$(STACK)/"; \
-				echo ""; \
-				echo "Create/bootstrap the application first:"; \
-				echo "  make openbao-app APP=$(STACK)"; \
-				exit 1; \
-			fi; \
-			ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
-			SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
-			echo "Using credentials from $$CRED_DIR"; \
-			$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
-				-e stack_name=$(STACK) \
-				-e openbao_role_id="$$ROLE_ID" \
-				-e openbao_secret_id="$$SECRET_ID"; \
-		fi; \
+		echo ">>> Step 6/8: OpenBao agent install (CLI + credentials)"; \
+		$(MAKE) --no-print-directory openbao-agent STACK=$(STACK); \
 		echo ""; \
 		echo ">>> Step 7/8: Tailscale setup"; \
 		if [ "$(STACK)" = "pihole" ]; then \
@@ -316,10 +360,8 @@ cadvisor:
 	@echo " Target: docker_hosts"
 	@echo "=================================================="
 	@echo ""
-
 	@echo ">>> Running cAdvisor playbook..."
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/cadvisor.yml
-
 	@echo ""
 	@echo "=================================================="
 	@echo " cAdvisor setup complete"
@@ -331,21 +373,9 @@ cadvisor:
 # -------------------------------------------------------------------
 
 destroy: terraform-init
-	@if [ -z "$(STACK)" ]; then \
-		echo "ERROR: STACK required"; \
-		echo ""; \
-		echo "Usage:"; \
-		echo "  make destroy STACK=<stack_name>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make destroy STACK=ai"; \
-		echo "  make destroy STACK=splunk"; \
-		exit 1; \
-	fi
-
+	$(call require,STACK,make destroy STACK=<stack_name>)
 	@echo "WARNING: Destroying $(STACK) in 5 seconds..."
 	@sleep 5
-
 	(cd $(TERRAFORM_DIR)/$(STACK) && terraform destroy)
 
 # -------------------------------------------------------------------
