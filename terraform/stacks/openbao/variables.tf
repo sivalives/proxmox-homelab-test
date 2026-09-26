@@ -132,3 +132,9 @@ variable "mount_points" {
   }))
   default = []
 }
+
+variable "proxmox_ssh_private_key_file" {
+  description = "Private SSH key used by Terraform to access Proxmox."
+  type        = string
+  sensitive   = true
+}
