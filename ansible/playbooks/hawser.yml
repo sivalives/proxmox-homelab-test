@@ -1,7 +1,6 @@
 ---
 - name: Setup Hawser agents
-  #hosts: hawser_hosts
-  hosts: "{{ stack_name }}"
+  hosts: hawser_hosts
   become: true
   gather_facts: true
 
