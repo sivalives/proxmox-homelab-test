@@ -1,2 +1,3 @@
 # ansible/host_vars/pihole.yml
 hawser_openbao_path: "secret/pihole"
+docker_data_mount: /opt/pihole-data

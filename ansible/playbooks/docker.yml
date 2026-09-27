@@ -48,11 +48,72 @@
         state: present
         update_cache: true
 
-    - name: Enable Docker service
+    # ---------------------------------------------------------
+    # Dedicated Docker storage
+    # docker_data_mount comes from host_vars
+    # ---------------------------------------------------------
+
+    - name: Verify Docker data mount exists
+      ansible.builtin.command:
+        cmd: findmnt -n "{{ docker_data_mount }}"
+      register: docker_data_mount_check
+      changed_when: false
+
+    - name: Fail if Docker data mount is not mounted
+      ansible.builtin.fail:
+        msg: >-
+          {{ docker_data_mount }} is not mounted.
+          Refusing to configure/start Docker because containerd
+          would otherwise consume the root filesystem.
+      when: docker_data_mount_check.rc != 0
+
+    - name: Create containerd data directory
+      ansible.builtin.file:
+        path: "{{ docker_data_mount }}/containerd"
+        state: directory
+        owner: root
+        group: root
+        mode: "0711"
+
+    # ---------------------------------------------------------
+    # Configure containerd to use dedicated disk - without this lxc root was gettting filled - /var/lib/
+    # ---------------------------------------------------------
+
+    - name: Stop containerd before changing configuration
+      ansible.builtin.systemd:
+        name: containerd
+        state: stopped
+
+    - name: Configure containerd data root
+      ansible.builtin.copy:
+        dest: /etc/containerd/config.toml
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          disabled_plugins = ["cri"]
+
+          root = "{{ docker_data_mount }}/containerd"
+
+    - name: Enable and start containerd
+      ansible.builtin.systemd:
+        name: containerd
+        enabled: true
+        state: started
+
+    # ---------------------------------------------------------
+    # Start Docker
+    # ---------------------------------------------------------
+
+    - name: Enable and start Docker service
       ansible.builtin.systemd:
         name: docker
         enabled: true
         state: started
+
+    # ---------------------------------------------------------
+    # Verification
+    # ---------------------------------------------------------
 
     - name: Verify Docker
       ansible.builtin.command:
@@ -71,3 +132,13 @@
         msg:
           - "{{ docker_version.stdout }}"
           - "{{ docker_compose_version.stdout }}"
+
+    - name: Display containerd storage location
+      ansible.builtin.command:
+        cmd: grep '^root = ' /etc/containerd/config.toml
+      register: containerd_root
+      changed_when: false
+
+    - name: Display containerd configuration
+      ansible.builtin.debug:
+        msg: "{{ containerd_root.stdout }}"

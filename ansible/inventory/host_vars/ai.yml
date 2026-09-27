@@ -1,2 +1,3 @@
 # ansible/host_vars/ai.yml
 hawser_openbao_path: "secret/ai"
+docker_data_mount: /opt/ai-data

@@ -1,2 +1,3 @@
 # ansible/host_vars/jellyfin.yml
 hawser_openbao_path: "secret/jellyfin"
+docker_data_mount: /opt/jellyfin-data

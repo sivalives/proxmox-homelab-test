@@ -1,2 +1,3 @@
 # ansible/host_vars/immich.yml
 hawser_openbao_path: "secret/immich"
+docker_data_mount: /opt/immich-data

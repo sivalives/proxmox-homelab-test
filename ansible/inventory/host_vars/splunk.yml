@@ -1,2 +1,3 @@
 # ansible/host_vars/splunk.yml
 hawser_openbao_path: "secret/splunk"
+docker_data_mount: /opt/splunk-data

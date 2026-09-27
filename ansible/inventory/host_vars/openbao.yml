@@ -1,2 +1,3 @@
 # ansible/host_vars/observability.yml
 hawser_openbao_path: "secret/openbao"
+docker_data_mount: /opt/openbao-data
