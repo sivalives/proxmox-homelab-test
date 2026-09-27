@@ -35,7 +35,7 @@
   # correctly). `bao status` is already inside the container and gives us
   # JSON we can trust regardless of wget/curl flavor.
   ansible.builtin.command:
-    argv: [docker, exec, "{{ openbao_container }}", bao, status, -format=json]
+    argv: [docker, exec, "-e", "BAO_ADDR={{ openbao_addr }}", "{{ openbao_container }}", bao, status, -format=json]
   register: health_check
   until: health_check.stdout | default('') | trim | length > 0
   retries: 15
