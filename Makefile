@@ -1,6 +1,6 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-setup openbao-app openbao-agent \
+.PHONY: help bootstrap openbao-server-setup openbao-app openbao-agent \
         terraform-init plan apply destroy deploy cadvisor clean
 
 # -------------------------------------------------------------------
@@ -54,7 +54,7 @@ help:
 	@echo "  make openbao-app APP=<app_name>"
 	@echo ""
 	@echo "Targets:"
-	@echo "  openbao-setup                          One-time: full OpenBao server setup"
+	@echo "  openbao-server-setup                          One-time: full OpenBao server setup"
 	@echo "                                          (permissions, init/unseal, policies, secrets)"
 	@echo "  bootstrap                              (legacy) One-time OpenBao server setup"
 	@echo "  openbao-app APP=dockership            Create/update OpenBao app + AppRole"
@@ -76,7 +76,7 @@ help:
 #
 # Pre-existing one-time setup target. Left untouched so anything that
 # already calls `make bootstrap` keeps working. For new/rebuilt
-# environments, prefer `make openbao-setup` below, which runs every
+# environments, prefer `make openbao-server-setup` below, which runs every
 # step (permissions, init/unseal, secrets) instead of just this one
 # script.
 # -------------------------------------------------------------------
@@ -94,7 +94,7 @@ bootstrap:
 # role - it covers all three phases (permissions, init/unseal/
 # policies/ui-admin, placeholder secrets) in one idempotent run.
 #
-# Adjust ANSIBLE_DIR/playbooks/openbao-setup.yml below if you named
+# Adjust ANSIBLE_DIR/playbooks/openbao-server-setup.yml below if you named
 # the playbook differently when you copied it into this repo, and
 # make sure it targets the right inventory group for your OpenBao
 # server host.
@@ -102,13 +102,13 @@ bootstrap:
 # Run this ONCE per OpenBao server. Safe to re-run.
 # -------------------------------------------------------------------
 
-openbao-setup:
+openbao-server-setup:
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao Server - Full First-Time Setup"
 	@echo "=================================================="
 	@echo ""
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-setup.yml
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-server-setup.yml
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao first-time setup complete"
