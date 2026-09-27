@@ -28,3 +28,7 @@ Thumbs.db
 .terraform*
 secret.tfvars
 *.secret.tfvars
+
+
+#Ignore bootstrap/
+.bootstrap/
