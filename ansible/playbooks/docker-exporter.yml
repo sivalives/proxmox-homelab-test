@@ -1,7 +1,7 @@
 ---
 - name: Deploy Docker Prometheus exporter
-  #hosts: docker_hosts
-  hosts: "{{ stack_name }}"
+  hosts: docker_hosts
+  #hosts: "{{ stack_name }}"
   become: true
   gather_facts: true
 
