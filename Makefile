@@ -135,18 +135,46 @@ openbao-server-setup:
 # This is intentionally NOT part of normal deploy.
 # -------------------------------------------------------------------
 
-openbao-app-setup:
-	$(call require,APP,make openbao-app-setup APP=<app_name>)
+openbao-server-setup:
 	@echo ""
 	@echo "=================================================="
-	@echo " OpenBao Application Bootstrap: $(APP)"
+	@echo " OpenBao Server - Full First-Time Setup"
 	@echo "=================================================="
 	@echo ""
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml
+
+	@echo ">>> Step 1/8: Pull latest Git changes"
+	cd $(ROOT_DIR) && git pull --ff-only
+
+	@echo ""
+	@echo ">>> Step 2/8: Terraform apply"
+	cd $(TERRAFORM_DIR)/openbao && terraform apply
+
+	@echo ""
+	@echo ">>> Waiting for LXC to become available..."
+	sleep 10
+
+	@echo ""
+	@echo ">>> Step 3/8: LXC bootstrap"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
+		-e stack_name=openbao
+
+	@echo ""
+	@echo ">>> Step 4/8: Docker setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
+		-e stack_name=openbao
+
+	@echo ""
+	@echo ">>> Step 5/8: OpenBao server setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-server-setup.yml
+
 	@echo ""
 	@echo "=================================================="
-	@echo " OpenBao application bootstrap complete: $(APP)"
+	@echo " OpenBao first-time setup complete"
 	@echo "=================================================="
+	@echo ""
+
+	@echo "Next: bootstrap each application's policy/secret/AppRole with:"
+	@echo "  make openbao-app-setup APP=<app_name>"
 	@echo ""
 
 # -------------------------------------------------------------------
