@@ -14,14 +14,11 @@ STACK ?=
 APP ?=
 
 ROOT_DIR := $(CURDIR)
-
-TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
-BOOTSTRAP_DIR := $(ANSIBLE_DIR)/.bootstrap
-
-
 ANSIBLE_DIR := $(ROOT_DIR)/ansible
 ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 ANSIBLE_PLAYBOOK := ansible-playbook
+TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
+BOOTSTRAP_DIR := $(ANSIBLE_DIR)/.bootstrap
 
 # Always run Ansible with the repository's configuration.
 export ANSIBLE_CONFIG
