@@ -16,8 +16,8 @@ APP ?=
 ROOT_DIR := $(CURDIR)
 
 TERRAFORM_DIR := $(ROOT_DIR)/terraform/stacks
-OPENBAO_DIR := $(ROOT_DIR)/stacks/openbao
-BOOTSTRAP_DIR := $(OPENBAO_DIR)/bootstrap
+BOOTSTRAP_DIR := $(ANSIBLE_DIR)/.bootstrap
+
 
 ANSIBLE_DIR := $(ROOT_DIR)/ansible
 ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
