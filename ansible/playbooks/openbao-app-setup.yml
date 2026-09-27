@@ -23,11 +23,8 @@
     controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
 
   vars_prompt:
-    - name: lxc_name
-      prompt: "LXC container name this app runs on (e.g. lxc107)"
-      private: false
-    - name: app_name
-      prompt: "Application/stack name (lowercase, hyphens ok - this becomes the policy/secret path)"
+    - name: stack_name
+      prompt: "Stack name (lowercase, hyphens ok - this becomes the policy/secret path)"
       private: false
     - name: openbao_admin_token
       prompt: "OpenBao root token"
@@ -49,16 +46,15 @@
     - name: Validate inputs
       ansible.builtin.assert:
         that:
-          - lxc_name is match('^[a-z0-9]+(-[a-z0-9]+)*$')
-          - app_name is match('^[a-z0-9][a-z0-9-]*$')
+          - stack_name is match('^[a-z0-9][a-z0-9-]*$')
           - include_shared_policy | lower in ['yes', 'no', 'true', 'false']
-        fail_msg: "Invalid lxc_name, app_name, or include_shared_policy value."
+        fail_msg: "Invalid lxc_name, stack_name, or include_shared_policy value."
 
     - name: Compute flags
       ansible.builtin.set_fact:
         include_shared: "{{ include_shared_policy | lower in ['yes', 'true'] }}"
         do_force_regenerate: "{{ force_regenerate | lower in ['yes', 'true'] }}"
-        bootstrap_folder: "{{ lxc_name }}-{{ app_name }}"
+        bootstrap_folder: "{{ stack_name }}"
 
     - name: Parse KEY=VALUE secrets input into a dict
       ansible.builtin.set_fact:
@@ -92,23 +88,23 @@
     - name: Render policy file for this app (SAME template every stack uses)
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../roles/openbao_server/templates/policies/app-policy.hcl.j2"
-        dest: "{{ openbao_policies_dir }}/{{ app_name }}-policy.hcl"
+        dest: "{{ openbao_policies_dir }}/{{ stack_name }}-policy.hcl"
         owner: root
         group: root
         mode: "0644"
       vars:
-        stack: "{{ app_name }}"
+        stack: "{{ stack_name }}"
 
     - name: Load the policy into OpenBao
       ansible.builtin.command:
-        argv: "{{ bao_exec + ['policy', 'write', app_name + '-policy', '/openbao/policies/' + app_name + '-policy.hcl'] }}"
+        argv: "{{ bao_exec + ['policy', 'write', stack_name + '-policy', '/openbao/policies/' + stack_name + '-policy.hcl'] }}"
       changed_when: true
 
     - name: Create/update the secret (only if secrets were supplied)
       ansible.builtin.command:
         argv: >-
           {{
-            bao_exec + ['kv', 'put', kv_mount + '/' + app_name] +
+            bao_exec + ['kv', 'put', kv_mount + '/' + stack_name] +
             (app_secret_data | dict2items | map(attribute='key')
               | zip(app_secret_data | dict2items | map(attribute='value'))
               | map('join', '=') | list)
@@ -119,28 +115,28 @@
 
     - name: Create the AppRole
       ansible.builtin.command:
-        argv: "{{ bao_exec + ['write', 'auth/approle/role/' + app_name,
-                  'token_policies=' + app_name + '-policy' + (',shared-policy' if include_shared else ''),
+        argv: "{{ bao_exec + ['write', 'auth/approle/role/' + stack_name,
+                  'token_policies=' + stack_name + '-policy' + (',shared-policy' if include_shared else ''),
                   'token_ttl=1h', 'token_max_ttl=4h',
                   'secret_id_ttl=0', 'secret_id_num_uses=0'] }}"
       changed_when: true
 
     - name: Force-delete the Secret ID if regenerating
       ansible.builtin.command:
-        argv: "{{ bao_exec + ['write', '-f', 'auth/approle/role/' + app_name + '/secret-id/destroy'] }}"
+        argv: "{{ bao_exec + ['write', '-f', 'auth/approle/role/' + stack_name + '/secret-id/destroy'] }}"
       when: do_force_regenerate
       changed_when: true
       failed_when: false
 
     - name: Read Role ID
       ansible.builtin.command:
-        argv: "{{ bao_exec + ['read', '-field=role_id', 'auth/approle/role/' + app_name + '/role-id'] }}"
+        argv: "{{ bao_exec + ['read', '-field=role_id', 'auth/approle/role/' + stack_name + '/role-id'] }}"
       register: role_id
       changed_when: false
 
     - name: Generate Secret ID
       ansible.builtin.command:
-        argv: "{{ bao_exec + ['write', '-field=secret_id', '-f', 'auth/approle/role/' + app_name + '/secret-id'] }}"
+        argv: "{{ bao_exec + ['write', '-field=secret_id', '-f', 'auth/approle/role/' + stack_name + '/secret-id'] }}"
       register: secret_id
       changed_when: true
       no_log: true
@@ -168,8 +164,8 @@
     - name: Summary
       ansible.builtin.debug:
         msg:
-          - "App added: {{ app_name }}"
-          - "Policy:    {{ app_name }}-policy (shared-policy attached: {{ include_shared }})"
-          - "Secret:    {{ kv_mount }}/{{ app_name }}"
+          - "App added: {{ stack_name }}"
+          - "Policy:    {{ stack_name }}-policy (shared-policy attached: {{ include_shared }})"
+          - "Secret:    {{ kv_mount }}/{{ stack_name }}"
           - "Credentials staged at {{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/"
           - "UI: {{ openbao_ui_url }}"
