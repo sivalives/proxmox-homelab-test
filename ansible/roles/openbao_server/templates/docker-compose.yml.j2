@@ -13,3 +13,6 @@ services:
       - {{ openbao_data_dir }}:/openbao/data
       - {{ openbao_policies_dir }}:/openbao/policies:ro
     command: server -config=/openbao/config/openbao.hcl
+    environment:
+      BAO_ADDR: "http://127.0.0.1:8200"
+      VAULT_ADDR: "http://127.0.0.1:8200"
