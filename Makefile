@@ -411,7 +411,7 @@ dockhand-agent-setup:
 	@echo "=================================================="
 	@echo ""
 	@echo ">>> Running dockhand -> hawser.yml playbook..."
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml -e stack_name=$(STACK);
 	@echo ""
 	@echo "=================================================="
 	@echo " dockhand agent setup complete"
