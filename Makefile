@@ -1,6 +1,6 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-server-setup openbao-app openbao-agent \
+.PHONY: help bootstrap openbao-server-setup openbao-app-setup openbao-agent \
         terraform-init plan apply destroy deploy cadvisor clean
 
 # -------------------------------------------------------------------
@@ -51,13 +51,13 @@ help:
 	@echo "Usage:"
 	@echo "  make <target> STACK=<stack_name>"
 	@echo "  make deploy STACK=<stack_name> [APP=<app_name>]"
-	@echo "  make openbao-app APP=<app_name>"
+	@echo "  make openbao-app-setup APP=<app_name>"
 	@echo ""
 	@echo "Targets:"
 	@echo "  openbao-server-setup                          One-time: full OpenBao server setup"
 	@echo "                                          (permissions, init/unseal, policies, secrets)"
 	@echo "  bootstrap                              (legacy) One-time OpenBao server setup"
-	@echo "  openbao-app APP=dockership            Create/update OpenBao app + AppRole"
+	@echo "  openbao-app-setup APP=dockership            Create/update OpenBao app + AppRole"
 	@echo "  openbao-agent STACK=splunk            Install OpenBao CLI + AppRole creds for a stack"
 	@echo "  terraform-init                        Initialize all Terraform stacks"
 	@echo "  plan STACK=splunk                     Plan infrastructure changes"
@@ -115,7 +115,7 @@ openbao-server-setup:
 	@echo "=================================================="
 	@echo ""
 	@echo "Next: bootstrap each application's policy/secret/AppRole with:"
-	@echo "  make openbao-app APP=<app_name>"
+	@echo "  make openbao-app-setup APP=<app_name>"
 	@echo ""
 
 # -------------------------------------------------------------------
@@ -135,15 +135,14 @@ openbao-server-setup:
 # This is intentionally NOT part of normal deploy.
 # -------------------------------------------------------------------
 
-openbao-app:
-	$(call require,APP,make openbao-app APP=<app_name>)
+openbao-app-setup:
+	$(call require,APP,make openbao-app-setup APP=<app_name>)
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao Application Bootstrap: $(APP)"
 	@echo "=================================================="
 	@echo ""
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app.yml \
-		-e app_name=$(APP)
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml
 	@echo ""
 	@echo "=================================================="
 	@echo " OpenBao application bootstrap complete: $(APP)"
@@ -183,7 +182,7 @@ openbao-agent:
 			echo "Expected: $(BOOTSTRAP_DIR)/$(STACK)/ or $(BOOTSTRAP_DIR)/<lxc>-$(STACK)/"; \
 			echo ""; \
 			echo "Create/bootstrap the application first:"; \
-			echo "  make openbao-app APP=$(STACK)"; \
+			echo "  make openbao-app-setup APP=$(STACK)"; \
 			exit 1; \
 		fi; \
 		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
