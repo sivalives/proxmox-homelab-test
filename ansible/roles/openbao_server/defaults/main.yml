@@ -11,16 +11,67 @@ secret_id_num_uses:    "0"
 controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
 
 # Placeholder values written ONCE, the first time each secret is created.
-# Existing secrets are never overwritten by this role (same behaviour as
-# your old 03-openbao-setup-secrets.sh). Go change the CHANGE_ME_* values
-# in the UI right after bootstrap.
+# Existing OpenBao secrets are never overwritten by this role.
+#
+# Change the CHANGE_ME_* values after bootstrap.
+
+# Placeholder values written ONCE, the first time each secret is created.
+# Existing OpenBao secrets are never overwritten by this role.
+#
+# Change the CHANGE_ME_* values after bootstrap.
+
+# ---------------------------------------------------------------------------
+# Shared secrets
+# OpenBao path: secret/shared
+# ---------------------------------------------------------------------------
 openbao_shared_secrets:
   SPLUNK_HEC_URL: "http://192.168.1.102:8088"
   SPLUNK_HEC_TOKEN: "CHANGE_ME_SPLUNK_HEC_TOKEN"
+  HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
 
+# ---------------------------------------------------------------------------
+# Application-specific secrets
+# ---------------------------------------------------------------------------
 openbao_stack_secrets:
+
+  # OpenBao path: secret/splunk
   splunk:
     SPLUNK_PASSWORD: "CHANGE_ME_SPLUNK_PASSWORD"
     SPLUNK_HEC_TOKEN: "CHANGE_ME_SPLUNK_HEC_TOKEN"
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # OpenBao path: secret/pihole
   pihole:
     PIHOLE_PASSWORD: "CHANGE_ME_PIHOLE_PASSWORD"
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # OpenBao path: secret/immich
+  immich:
+    IMMICH_DB_USER: "immich"
+    IMMICH_DB_PASSWORD: "CHANGE_ME_IMMICH_DB_PASSWORD"
+    IMMICH_REDIS_PASSWORD: "CHANGE_ME_IMMICH_REDIS_PASSWORD"
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # OpenBao path: secret/observability
+  observability:
+    NTFY_USER: "CHANGE_ME_NTFY_USER"
+    NTFY_PASSWORD: "CHANGE_ME_NTFY_PASSWORD"
+    NTFY_PASSWORD_HASH: "CHANGE_ME_NTFY_PASSWORD_HASH"
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # OpenBao path: secret/vaultwarden
+  vaultwarden:
+    VW_ADMIN_TOKEN: "CHANGE_ME_VW_ADMIN_TOKEN"
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # AI path: secret/ai
+  ai:
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # dockership path: secret/ai
+  dockership:
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+
+  # openbao path: secret/ai
+  openbao:
+    HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
