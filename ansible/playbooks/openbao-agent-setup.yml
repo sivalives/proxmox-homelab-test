@@ -17,17 +17,12 @@
   vars:
     controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
 
-  vars_prompt:
-    - name: target_stack
-      prompt: "Which stack is this LXC for? (must match a folder under stacks/openbao/bootstrap/)"
-      private: false
-
   pre_tasks:
     - name: Load this stack's AppRole credentials from the controller
       ansible.builtin.set_fact:
-        openbao_role_id: "{{ lookup('file', controller_bootstrap_dir + '/' + target_stack + '/role-id') }}"
-        openbao_secret_id: "{{ lookup('file', controller_bootstrap_dir + '/' + target_stack + '/secret-id') }}"
-        openbao_stack: "{{ target_stack }}"
+        openbao_role_id: "{{ lookup('file', controller_bootstrap_dir + '/' + stack_name + '/role-id') }}"
+        openbao_secret_id: "{{ lookup('file', controller_bootstrap_dir + '/' + stack_name + '/secret-id') }}"
+        openbao_stack: "{{ stack_name }}"
       no_log: true
 
   roles:
