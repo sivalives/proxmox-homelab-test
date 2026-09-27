@@ -9,7 +9,8 @@
 #   ansible-playbook playbooks/03-deploy-agent.yml -l <lxc-host-in-inventory>
 
 - name: Deploy OpenBao agent to an LXC
-  hosts: openbao_agents
+  #hosts: openbao_agents
+  hosts: "{{ stack_name }}"
   become: true
   gather_facts: false
 
