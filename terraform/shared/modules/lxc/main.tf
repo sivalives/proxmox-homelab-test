@@ -46,12 +46,30 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   dynamic "mount_point" {
-    for_each = var.mount_points
+    for_each = concat(
+      [
+        for mount in var.mount_points : {
+          volume = mount.storage
+          size   = "${mount.size_gb}G"
+          path   = mount.mount
+          read_only = false
+        }
+      ],
+      [
+        for mount in var.bind_mounts : {
+          volume = mount.host_path
+          size   = null
+          path   = mount.guest_path
+          read_only = mount.read_only
+        }
+      ]
+    )
 
     content {
-      volume = mount_point.value.storage
-      size   = "${mount_point.value.size_gb}G"
-      path   = mount_point.value.mount
+      volume    = mount_point.value.volume
+      path      = mount_point.value.path
+      size      = mount_point.value.size
+      read_only = mount_point.value.read_only
     }
   }
 
@@ -122,20 +140,11 @@ resource "terraform_data" "docker_lxc_proxmox_config" {
     inline = concat(
       [
         "chmod 700 /tmp/lxc-${var.vmid}-docker-config.sh",
-
         "/tmp/lxc-${var.vmid}-docker-config.sh ${var.vmid} ${var.gpu_passthrough}",
-
         "pct stop ${var.vmid} || true"
       ],
-
-      [
-        for index, mount in var.bind_mounts :
-        "pct set ${var.vmid} -mp${index} ${mount.host_path},mp=${mount.guest_path}${mount.read_only ? ",ro=1" : ""}"
-      ],
-
       [
         "pct start ${var.vmid}",
-
         "rm -f /tmp/lxc-${var.vmid}-docker-config.sh"
       ]
     )
