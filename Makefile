@@ -118,6 +118,17 @@ openbao-server-setup:
 	@echo "  make openbao-app-setup APP=<app_name>"
 	@echo ""
 
+
+openbao-app-setup:
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao App setup - set per LXC level"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml
+	@echo ""
+	@echo "=================================================="
+
 # -------------------------------------------------------------------
 # OpenBao Application Bootstrap
 # -------------------------------------------------------------------
