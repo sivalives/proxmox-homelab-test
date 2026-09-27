@@ -1,7 +1,10 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
-.PHONY: help bootstrap openbao-server-setup openbao-app-setup openbao-agent \
-        terraform-init plan apply destroy deploy docker-exporter clean
+.PHONY: help bootstrap \
+        openbao-server-setup openbao-app-setup openbao-agent \
+        lxc-bootstrap docker-setup hawser-setup docker-exporter-setup \
+        tailscale-setup deploy-stack \
+        terraform-init plan apply destroy deploy clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -25,7 +28,8 @@ export ANSIBLE_CONFIG
 
 # -------------------------------------------------------------------
 # Helper: fail with a message if a required variable is empty.
-# Usage inside a recipe:  $(call require,STACK,make plan STACK=<stack_name>)
+# Usage:
+#   $(call require,STACK,make docker-setup STACK=<stack_name>)
 # -------------------------------------------------------------------
 
 define require
@@ -50,35 +54,79 @@ help:
 	@echo ""
 	@echo "Usage:"
 	@echo "  make <target> STACK=<stack_name>"
-	@echo "  make deploy STACK=<stack_name> [APP=<app_name>]"
-	@echo "  make openbao-app-setup APP=<app_name>"
 	@echo ""
-	@echo "Targets:"
-	@echo "  openbao-server-setup                          One-time: full OpenBao server setup"
-	@echo "                                          (permissions, init/unseal, policies, secrets)"
-	@echo "  bootstrap                              (legacy) One-time OpenBao server setup"
-	@echo "  openbao-app-setup APP=dockership            Create/update OpenBao app + AppRole"
-	@echo "  openbao-agent STACK=splunk            Install OpenBao CLI + AppRole creds for a stack"
-	@echo "  terraform-init                        Initialize all Terraform stacks"
-	@echo "  plan STACK=splunk                     Plan infrastructure changes"
-	@echo "  apply STACK=splunk                    Create/update infrastructure"
-	@echo "  deploy STACK=ai                       Full deployment of stack (includes agent install)"
-	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
-	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
-	@echo "  docker-exporter                              Setup docker-exporter on all Docker hosts"
-	@echo "  destroy STACK=splunk                  Destroy infrastructure"
-	@echo "  clean                                  Clean Terraform cache"
+	@echo "=================================================="
+	@echo " OpenBao"
+	@echo "=================================================="
+	@echo "  make openbao-server-setup"
+	@echo "      Full OpenBao server setup"
+	@echo ""
+	@echo "  make bootstrap"
+	@echo "      Legacy OpenBao bootstrap"
+	@echo ""
+	@echo "  make openbao-app-setup APP=<app_name>"
+	@echo "      Create/update OpenBao app + AppRole"
+	@echo ""
+	@echo "  make openbao-agent STACK=<stack_name>"
+	@echo "      Install OpenBao CLI + AppRole credentials"
+	@echo ""
+	@echo "=================================================="
+	@echo " Individual Ansible Playbooks"
+	@echo "=================================================="
+	@echo "  make lxc-bootstrap STACK=ai"
+	@echo "      Bootstrap an LXC"
+	@echo ""
+	@echo "  make docker-setup STACK=ai"
+	@echo "      Install/configure Docker on one host"
+	@echo ""
+	@echo "  make hawser-setup STACK=ai"
+	@echo "      Install Hawser on one host"
+	@echo ""
+	@echo "  make docker-exporter-setup STACK=dockership"
+	@echo "      Install docker-exporter on one host"
+	@echo ""
+	@echo "  make tailscale-setup STACK=pihole"
+	@echo "      Configure Tailscale on one host"
+	@echo ""
+	@echo "  make deploy-stack STACK=ai"
+	@echo "      Run deploy-stack.yml directly"
+	@echo ""
+	@echo "=================================================="
+	@echo " Terraform"
+	@echo "=================================================="
+	@echo "  make terraform-init"
+	@echo "      Initialize all Terraform stacks"
+	@echo ""
+	@echo "  make plan STACK=ai"
+	@echo "      Plan infrastructure changes"
+	@echo ""
+	@echo "  make apply STACK=ai"
+	@echo "      Create/update infrastructure"
+	@echo ""
+	@echo "  make destroy STACK=ai"
+	@echo "      Destroy infrastructure"
+	@echo ""
+	@echo "=================================================="
+	@echo " Deployment"
+	@echo "=================================================="
+	@echo "  make deploy STACK=ai"
+	@echo "      Full deployment of stack"
+	@echo ""
+	@echo "  make deploy STACK=ai APP=ollama"
+	@echo "      Deploy only ollama"
+	@echo ""
+	@echo "  make deploy STACK=dockership APP=dockhand"
+	@echo "      Deploy only dockhand"
+	@echo ""
+	@echo "=================================================="
+	@echo " Other"
+	@echo "=================================================="
+	@echo "  make clean"
+	@echo "      Clean Terraform cache"
 	@echo ""
 
 # -------------------------------------------------------------------
-# OpenBao Bootstrap (legacy - kept as-is, do not remove)
-# -------------------------------------------------------------------
-#
-# Pre-existing one-time setup target. Left untouched so anything that
-# already calls `make bootstrap` keeps working. For new/rebuilt
-# environments, prefer `make openbao-server-setup` below, which runs every
-# step (permissions, init/unseal, secrets) instead of just this one
-# script.
+# OpenBao Bootstrap (legacy - kept as-is)
 # -------------------------------------------------------------------
 
 bootstrap:
@@ -87,63 +135,6 @@ bootstrap:
 
 # -------------------------------------------------------------------
 # OpenBao Server - Full First-Time Setup
-# -------------------------------------------------------------------
-#
-# The old numbered shell scripts (00-fix-permissions, 01-bootstrap,
-# 03-setup-secrets) have been replaced by the openbao_server Ansible
-# role - it covers all three phases (permissions, init/unseal/
-# policies/ui-admin, placeholder secrets) in one idempotent run.
-#
-# Adjust ANSIBLE_DIR/playbooks/openbao-server-setup.yml below if you named
-# the playbook differently when you copied it into this repo, and
-# make sure it targets the right inventory group for your OpenBao
-# server host.
-#
-# Run this ONCE per OpenBao server. Safe to re-run.
-# -------------------------------------------------------------------
-
-openbao-server-setup:
-	@echo ""
-	@echo "=================================================="
-	@echo " OpenBao Server - Full First-Time Setup"
-	@echo "=================================================="
-	@echo ""
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-server-setup.yml
-	@echo ""
-	@echo "=================================================="
-	@echo " OpenBao first-time setup complete"
-	@echo "=================================================="
-	@echo ""
-	@echo "Next: bootstrap each application's policy/secret/AppRole with:"
-	@echo "  make openbao-app-setup APP=<app_name>"
-	@echo ""
-
-
-openbao-app-setup:
-	@echo ""
-	@echo "=================================================="
-	@echo " OpenBao App setup - set per LXC level"
-	@echo "=================================================="
-	@echo ""
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml
-	@echo ""
-	@echo "=================================================="
-
-# -------------------------------------------------------------------
-# OpenBao Application Bootstrap
-# -------------------------------------------------------------------
-#
-# Creates/updates:
-#   - secret/<app>
-#   - <app>-policy
-#   - AppRole <app>
-#   - Role ID
-#   - Secret ID
-#
-# Credentials are staged under:
-#   stacks/openbao/bootstrap/<app>/
-#
-# This is intentionally NOT part of normal deploy.
 # -------------------------------------------------------------------
 
 openbao-server-setup:
@@ -189,20 +180,27 @@ openbao-server-setup:
 	@echo ""
 
 # -------------------------------------------------------------------
-# OpenBao Agent - install CLI + AppRole credentials for one stack
+# OpenBao Application Setup
 # -------------------------------------------------------------------
-#
-# Standalone target so it can be run on its own (`make openbao-agent
-# STACK=splunk`) AND reused by `deploy` for every stack, instead of
-# duplicating the credential lookup in two places.
-#
-# Looks for staged credentials in either layout, so it works whether
-# they were created by the old lxc-prefixed flow or the current one:
-#   stacks/openbao/bootstrap/<stack>/role-id            (current)
-#   stacks/openbao/bootstrap/<lxc_name>-<stack>/role-id  (legacy)
-#
-# Skipped automatically for STACK=openbao (the server doesn't need
-# credentials to reach itself).
+
+openbao-app-setup:
+	$(call require,APP,make openbao-app-setup APP=<app_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao App Setup"
+	@echo " App: $(APP)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml \
+		-e app_name=$(APP)
+	@echo ""
+	@echo "=================================================="
+	@echo " OpenBao app setup complete"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# OpenBao Agent - one host
 # -------------------------------------------------------------------
 
 openbao-agent:
@@ -234,13 +232,140 @@ openbao-agent:
 	fi
 
 # -------------------------------------------------------------------
-# Terraform Initialization
+# Individual Ansible Playbooks
 # -------------------------------------------------------------------
-#
-# Initialize every Terraform stack.
-#
-# Safe to run repeatedly.
-# Does not modify infrastructure.
+
+# -------------------------------------------------------------------
+# LXC Bootstrap
+# -------------------------------------------------------------------
+
+lxc-bootstrap:
+	$(call require,STACK,make lxc-bootstrap STACK=<stack_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " LXC Bootstrap"
+	@echo " Target: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
+		-e stack_name=$(STACK)
+	@echo ""
+	@echo "=================================================="
+	@echo " LXC bootstrap complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Docker Setup
+# -------------------------------------------------------------------
+
+docker-setup:
+	$(call require,STACK,make docker-setup STACK=<stack_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " Docker Setup"
+	@echo " Target: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
+		-e stack_name=$(STACK)
+	@echo ""
+	@echo "=================================================="
+	@echo " Docker setup complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Hawser Setup
+# -------------------------------------------------------------------
+
+hawser-setup:
+	$(call require,STACK,make hawser-setup STACK=<stack_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " Hawser Agent Setup"
+	@echo " Target: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
+		-e stack_name=$(STACK)
+	@echo ""
+	@echo "=================================================="
+	@echo " Hawser setup complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Docker Exporter Setup
+# -------------------------------------------------------------------
+
+docker-exporter-setup:
+	$(call require,STACK,make docker-exporter-setup STACK=<stack_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " Docker Exporter Setup"
+	@echo " Target: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker-exporter.yml \
+		-e stack_name=$(STACK)
+	@echo ""
+	@echo "=================================================="
+	@echo " Docker exporter setup complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Tailscale Setup
+# -------------------------------------------------------------------
+
+tailscale-setup:
+	$(call require,STACK,make tailscale-setup STACK=<stack_name>)
+	@echo ""
+	@echo "=================================================="
+	@echo " Tailscale Setup"
+	@echo " Target: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
+		-e stack_name=$(STACK)
+	@echo ""
+	@echo "=================================================="
+	@echo " Tailscale setup complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Deploy Stack Playbook - direct execution
+# -------------------------------------------------------------------
+
+deploy-stack:
+	$(call require,STACK,make deploy-stack STACK=<stack_name> [APP=<app_name>])
+	@echo ""
+	@echo "=================================================="
+	@echo " Deploy Stack Playbook"
+	@echo " Stack: $(STACK)"
+	@echo " App:   $(if $(APP),$(APP),ALL)"
+	@echo "=================================================="
+	@echo ""
+
+	@if [ -n "$(APP)" ]; then \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
+			-e stack_name=$(STACK) \
+			-e app_name=$(APP); \
+	else \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
+			-e stack_name=$(STACK); \
+	fi
+
+	@echo ""
+	@echo "=================================================="
+	@echo " Deploy stack playbook complete"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
+# Terraform Initialization
 # -------------------------------------------------------------------
 
 terraform-init:
@@ -280,31 +405,6 @@ apply: terraform-init
 
 # -------------------------------------------------------------------
 # Deploy
-# -------------------------------------------------------------------
-#
-# Two deployment modes:
-#
-# 1. Full stack deployment:
-#
-#      make deploy STACK=ai
-#
-#    Runs:
-#      Git pull
-#      Terraform apply
-#      LXC bootstrap
-#      Docker setup
-#      Hawser setup
-#      OpenBao agent install (CLI + AppRole credentials, any stack)
-#      Tailscale setup
-#      Deploy all applications
-#
-# 2. Application-only deployment:
-#
-#      make deploy STACK=ai APP=ollama
-#
-#    Runs ONLY:
-#      Git pull
-#      Deploy requested application
 # -------------------------------------------------------------------
 
 deploy:
@@ -379,46 +479,6 @@ deploy:
 		echo " Applications deployed: ALL"; \
 		echo "=================================================="; \
 	fi
-
-# -------------------------------------------------------------------
-# docker-exporter
-# -------------------------------------------------------------------
-
-docker-exporter:
-	@echo ""
-	@echo "=================================================="
-	@echo " docker-exporter Setup"
-	@echo " Target: docker_hosts"
-	@echo "=================================================="
-	@echo ""
-	@echo ">>> Running docker-exporter playbook..."
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker-exporter.yml
-	@echo ""
-	@echo "=================================================="
-	@echo " docker-exporter setup complete"
-	@echo "=================================================="
-	@echo ""
-
-# -------------------------------------------------------------------
-# docker-exporter
-# -------------------------------------------------------------------
-
-dockhand-agent-setup:
-	@echo ""
-	@echo "=================================================="
-	@echo " docker-exporter Setup"
-	@echo " Target: docker_hosts"
-	@echo "=================================================="
-	@echo ""
-	@echo ">>> Running dockhand -> hawser.yml playbook..."
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml
-	@echo ""
-	@echo "=================================================="
-	@echo " dockhand agent setup complete"
-	@echo "=================================================="
-	@echo ""
-
-
 
 # -------------------------------------------------------------------
 # Destroy
