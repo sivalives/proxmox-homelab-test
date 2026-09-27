@@ -12,11 +12,11 @@ openbao_policies_dir:  "{{ openbao_base_dir }}/policies"
 openbao_bootstrap_dir: "{{ openbao_base_dir }}/bootstrap"
 
 openbao_container: openbao
-openbao_addr:      "http://127.0.0.1:8200"
+openbao_addr: "http://192.168.1.101:8200"
 openbao_version:   "2.6.2"
 
 # Used only for human-readable messages / summaries, not for API calls.
-openbao_ui_url: "http://192.168.1.106:8200/ui/"
+openbao_ui_url: "http://192.168.1.101:8200/ui/"
 
 openbao_uid: 100
 openbao_gid: 1000
