@@ -1,7 +1,7 @@
 # Homelab Makefile - Terraform + Ansible + OpenBao + Dockhand/Hawser
 
 .PHONY: help bootstrap openbao-server-setup openbao-app-setup openbao-agent \
-        terraform-init plan apply destroy deploy cadvisor clean
+        terraform-init plan apply destroy deploy docker-exporter clean
 
 # -------------------------------------------------------------------
 # Variables
@@ -65,7 +65,7 @@ help:
 	@echo "  deploy STACK=ai                       Full deployment of stack (includes agent install)"
 	@echo "  deploy STACK=ai APP=ollama            Deploy only ollama"
 	@echo "  deploy STACK=dockership APP=dockhand  Deploy only dockhand"
-	@echo "  cadvisor                              Setup cAdvisor on all Docker hosts"
+	@echo "  docker-exporter                              Setup docker-exporter on all Docker hosts"
 	@echo "  destroy STACK=splunk                  Destroy infrastructure"
 	@echo "  clean                                  Clean Terraform cache"
 	@echo ""
@@ -315,12 +315,12 @@ deploy:
 		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
 			-e stack_name=$(STACK); \
 		echo ""; \
-		echo ">>> Step 5/8: Hawser Agent setup"; \
+		echo ">>> Step 5/8: OpenBao agent install (CLI + credentials)"; \
+		$(MAKE) --no-print-directory openbao-agent STACK=$(STACK); \
+		echo ""; \
+		echo ">>> Step 6/8: Hawser Agent setup"; \
 		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
 			-e stack_name=$(STACK); \
-		echo ""; \
-		echo ">>> Step 6/8: OpenBao agent install (CLI + credentials)"; \
-		$(MAKE) --no-print-directory openbao-agent STACK=$(STACK); \
 		echo ""; \
 		echo ">>> Step 7/8: Tailscale setup"; \
 		if [ "$(STACK)" = "pihole" ]; then \
@@ -342,21 +342,21 @@ deploy:
 	fi
 
 # -------------------------------------------------------------------
-# cAdvisor
+# docker-exporter
 # -------------------------------------------------------------------
 
-cadvisor:
+docker-exporter:
 	@echo ""
 	@echo "=================================================="
-	@echo " cAdvisor Setup"
+	@echo " docker-exporter Setup"
 	@echo " Target: docker_hosts"
 	@echo "=================================================="
 	@echo ""
-	@echo ">>> Running cAdvisor playbook..."
-	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/cadvisor.yml
+	@echo ">>> Running docker-exporter playbook..."
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker-exporter.yml
 	@echo ""
 	@echo "=================================================="
-	@echo " cAdvisor setup complete"
+	@echo " docker-exporter setup complete"
 	@echo "=================================================="
 	@echo ""
 
