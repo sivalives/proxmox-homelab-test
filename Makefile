@@ -188,7 +188,7 @@ openbao-agent:
 		ROLE_ID=$$(cat "$$CRED_DIR/role-id"); \
 		SECRET_ID=$$(cat "$$CRED_DIR/secret-id"); \
 		echo "Using credentials from $$CRED_DIR"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao.yml \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-agent-setup.yml \
 			-e stack_name=$(STACK) \
 			-e openbao_role_id="$$ROLE_ID" \
 			-e openbao_secret_id="$$SECRET_ID"; \
