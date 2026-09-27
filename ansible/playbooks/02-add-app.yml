@@ -17,6 +17,11 @@
   become: true
   gather_facts: false
 
+  vars:
+    # Matches the same convention roles/openbao_server uses, so both
+    # flows write AppRole credentials to one place on the controller.
+    controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
+
   vars_prompt:
     - name: lxc_name
       prompt: "LXC container name this app runs on (e.g. lxc107)"
@@ -142,7 +147,7 @@
 
     - name: Create bootstrap folder on the controller
       ansible.builtin.file:
-        path: "{{ playbook_dir }}/../files/bootstrap/{{ bootstrap_folder }}"
+        path: "{{ controller_bootstrap_dir }}/{{ bootstrap_folder }}"
         state: directory
         mode: "0700"
       delegate_to: localhost
@@ -151,7 +156,7 @@
     - name: Stage Role ID / Secret ID on the controller
       ansible.builtin.copy:
         content: "{{ item.content }}\n"
-        dest: "{{ playbook_dir }}/../files/bootstrap/{{ bootstrap_folder }}/{{ item.name }}"
+        dest: "{{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/{{ item.name }}"
         mode: "0600"
       loop:
         - { name: role-id, content: "{{ role_id.stdout }}" }
@@ -166,5 +171,5 @@
           - "App added: {{ app_name }}"
           - "Policy:    {{ app_name }}-policy (shared-policy attached: {{ include_shared }})"
           - "Secret:    {{ kv_mount }}/{{ app_name }}"
-          - "Credentials staged at files/bootstrap/{{ bootstrap_folder }}/"
+          - "Credentials staged at {{ controller_bootstrap_dir }}/{{ bootstrap_folder }}/"
           - "UI: {{ openbao_ui_url }}"

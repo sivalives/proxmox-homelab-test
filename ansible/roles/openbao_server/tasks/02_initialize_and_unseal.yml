@@ -41,10 +41,18 @@
         bao_init_data: "{{ bao_init.stdout | from_json }}"
       no_log: true
 
+    - name: Ensure the controller bootstrap directory exists
+      ansible.builtin.file:
+        path: "{{ controller_bootstrap_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
     - name: Save root token + unseal keys to the controller
       ansible.builtin.copy:
         content: "{{ bao_init.stdout }}"
-        dest: "{{ playbook_dir }}/../files/bootstrap/{{ inventory_hostname }}-init.json"
+        dest: "{{ controller_bootstrap_dir }}/{{ inventory_hostname }}-init.json"
         mode: "0600"
       delegate_to: localhost
       become: false
@@ -55,7 +63,7 @@
         msg:
           - "OpenBao was initialized for the first time."
           - "Root token + 5 unseal keys were written to:"
-          - "files/bootstrap/{{ inventory_hostname }}-init.json (mode 0600, on the controller)"
+          - "{{ controller_bootstrap_dir }}/{{ inventory_hostname }}-init.json (mode 0600, on the controller)"
           - "Move this file into a password manager or 'ansible-vault encrypt' it,"
           - "then delete the plaintext copy. Anyone with 3 of the 5 keys plus"
           - "this file can unseal and fully administer OpenBao."

@@ -4,6 +4,12 @@ approle_token_max_ttl: "4h"
 secret_id_ttl:         "0"
 secret_id_num_uses:    "0"
 
+# Where AppRole credentials (and the one-time root-token/unseal-key
+# file) land on the CONTROLLER - matches the convention your own
+# openbao-app.yml already used, so both flows write to the same place:
+#   <repo_root>/stacks/openbao/bootstrap/
+controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
+
 # Placeholder values written ONCE, the first time each secret is created.
 # Existing secrets are never overwritten by this role (same behaviour as
 # your old 03-openbao-setup-secrets.sh). Go change the CHANGE_ME_* values

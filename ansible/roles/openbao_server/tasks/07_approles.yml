@@ -70,7 +70,7 @@
 - name: Fetch Role ID / Secret ID back to the controller
   ansible.builtin.fetch:
     src: "{{ openbao_bootstrap_dir }}/{{ item.0 }}/{{ item.1 }}"
-    dest: "{{ playbook_dir }}/../files/bootstrap/{{ item.0 }}/{{ item.1 }}"
+    dest: "{{ controller_bootstrap_dir }}/{{ item.0 }}/{{ item.1 }}"
     flat: true
   loop: "{{ openbao_app_stacks | product(['role-id', 'secret-id']) | list }}"
   no_log: true
