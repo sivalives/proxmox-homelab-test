@@ -26,17 +26,19 @@
     chdir: "{{ openbao_base_dir }}"
   changed_when: true
 
-- name: Wait for the OpenBao API to answer (any HTTP status - sealed/uninitialized is fine here)
+- name: Wait for the OpenBao API to answer (sealed/uninitialized is fine here - we just need a response)
+  # Deliberately NOT using wget/curl here: this container's wget is BusyBox's,
+  # and its `-S` header-dump format doesn't match GNU wget's, which previously
+  # broke the awk parsing below and caused this task to spuriously exhaust all
+  # retries even though the API was already answering (a 501 "not initialized"
+  # response is expected and fine at this point - it just wasn't being parsed
+  # correctly). `bao status` is already inside the container and gives us
+  # JSON we can trust regardless of wget/curl flavor.
   ansible.builtin.command:
-    argv:
-      - docker
-      - exec
-      - "{{ openbao_container }}"
-      - sh
-      - -c
-      - "wget -q -S -O /dev/null http://127.0.0.1:8200/v1/sys/health 2>&1 | awk '/HTTP\\// {print $2}'"
+    argv: [docker, exec, "{{ openbao_container }}", bao, status, -format=json]
   register: health_check
-  until: health_check.stdout is match('^[0-9]{3}$')
+  until: health_check.stdout | default('') | trim | length > 0
   retries: 15
   delay: 2
   changed_when: false
+  failed_when: false
