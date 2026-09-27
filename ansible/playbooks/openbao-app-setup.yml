@@ -20,7 +20,7 @@
   vars:
     # Matches the same convention roles/openbao_server uses, so both
     # flows write AppRole credentials to one place on the controller.
-    controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
+    controller_bootstrap_dir: "{{ playbook_dir }}/../.bootstrap"
 
   vars_prompt:
     - name: stack_name

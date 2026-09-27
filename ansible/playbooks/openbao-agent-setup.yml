@@ -15,7 +15,7 @@
   gather_facts: false
 
   vars:
-    controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
+    controller_bootstrap_dir: "{{ playbook_dir }}/../.bootstrap"
 
   pre_tasks:
     - name: Load this stack's AppRole credentials from the controller

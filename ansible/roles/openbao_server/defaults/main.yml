@@ -8,7 +8,7 @@ secret_id_num_uses:    "0"
 # file) land on the CONTROLLER - matches the convention your own
 # openbao-app.yml already used, so both flows write to the same place:
 #   <repo_root>/stacks/openbao/bootstrap/
-controller_bootstrap_dir: "{{ playbook_dir }}/../../stacks/openbao/bootstrap"
+controller_bootstrap_dir: "{{ playbook_dir }}/../.bootstrap"
 
 # Placeholder values written ONCE, the first time each secret is created.
 # Existing OpenBao secrets are never overwritten by this role.
