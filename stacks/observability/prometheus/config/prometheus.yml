@@ -111,7 +111,3 @@ scrape_configs:
       - targets: ['192.168.1.108:9713']
         labels:
           lxc: 'observability'
-
-      - targets: ['192.168.1.110:9713']
-        labels:
-          lxc: 'controller'
