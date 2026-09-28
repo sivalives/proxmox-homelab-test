@@ -58,6 +58,7 @@ openbao_stack_secrets:
     NTFY_PASSWORD: "CHANGE_ME_NTFY_PASSWORD"
     NTFY_PASSWORD_HASH: "CHANGE_ME_NTFY_PASSWORD_HASH"
     HAWSER_TOKEN: "CHANGE_ME_HAWSER_TOKEN"
+    PVE_TOKEN_VALUE: "CHANGE_ME_PVE_TOKEN"
 
   # OpenBao path: secret/vaultwarden
   vaultwarden:
