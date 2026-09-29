@@ -1,125 +1,124 @@
+name: ntfy
+
+# Owner stack: creates the shared network + secrets volume that the
+# observability stack attaches to. Start this one FIRST.
+#   cd ntfy && docker compose up -d
+
+x-splunk-logging: &splunk
+  driver: splunk
+  options: &splunk-opts
+    splunk-url: ${SPLUNK_HEC_URL}
+    splunk-token: ${SPLUNK_HEC_TOKEN}
+    splunk-index: docker_logs
+    splunk-verify-connection: "false"
+    splunk-format: json
+
 services:
 
   # ============================================================
-  # ntfy
+  # init - one-shot, root, idempotent.
+  #  * hashes NTFY_PASSWORD (re-hashes only if the password changed)
+  #  * generates the ntfy access token once, with ntfy's own generator
+  #  * writes ntfy.env (read by ntfy) and alertmanager_token
+  #    (0400, owned by uid 65534) into the shared secrets volume
   # ============================================================
+  init:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy-init
+    restart: "no"
+    user: "0:0"
+    entrypoint: ["sh", "-ec"]
+    command:
+      - |
+        S=/secrets
+        mkdir -p /data/ntfy/cache /data/ntfy/etc
+
+        sum=$$(printf %s "$$NTFY_PASSWORD" | sha256sum | cut -d" " -f1)
+        if [ ! -s $$S/hash ] || [ "$$(cat $$S/pwsum 2>/dev/null)" != "$$sum" ]; then
+          printf %s "$$NTFY_PASSWORD" | ntfy user hash | tail -n1 | tr -d "\r\n" > $$S/hash
+          printf %s "$$sum" > $$S/pwsum
+        fi
+        case "$$(cat $$S/hash)" in \$$2?\$$*) ;; *) echo "bcrypt hash generation failed" >&2; exit 1;; esac
+
+        [ -s $$S/token ] || ntfy token generate | tr -d "\r\n" > $$S/token
+
+        printf "export NTFY_AUTH_USERS='%s:%s:user'\nexport NTFY_AUTH_TOKENS='%s:%s:alertmanager'\n" \
+          "$$NTFY_USER" "$$(cat $$S/hash)" "$$NTFY_USER" "$$(cat $$S/token)" > $$S/ntfy.env
+        chmod 600 $$S/ntfy.env
+        install -m 0400 -o 65534 -g 65534 $$S/token $$S/alertmanager_token
+        echo "ntfy init complete"
+    environment:
+      NTFY_USER: "${NTFY_USER:-siva}"
+      NTFY_PASSWORD: "${NTFY_PASSWORD:?set NTFY_PASSWORD in .env}"
+    volumes:
+      - secrets:/secrets
+      - /opt/docker-data:/data
+    networks: [monitoring]
+
   ntfy:
     image: binwiederhier/ntfy:latest
     container_name: ntfy
-    command: serve
     restart: unless-stopped
-
+    entrypoint: ["sh", "-c"]
+    command: [". /secrets/ntfy.env && exec ntfy serve"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
     ports:
       - "8080:80"
-
     volumes:
+      - secrets:/secrets:ro
       - /opt/docker-data/ntfy/cache:/var/cache/ntfy
       - /opt/docker-data/ntfy/etc:/etc/ntfy
       - ./templates:/etc/ntfy/templates:ro
-
     environment:
-      # ----------------------------------------------------------
-      # Server
-      # ----------------------------------------------------------
       NTFY_BASE_URL: "http://ntfy.lan"
       NTFY_LISTEN_HTTP: "0.0.0.0:80"
       NTFY_BEHIND_PROXY: "true"
-
-      # ----------------------------------------------------------
-      # Message cache
-      # ----------------------------------------------------------
       NTFY_CACHE_FILE: "/var/cache/ntfy/cache.db"
       NTFY_CACHE_DURATION: "7d"
-
-      # ----------------------------------------------------------
-      # Authentication
-      # ----------------------------------------------------------
       NTFY_AUTH_FILE: "/etc/ntfy/user.db"
       NTFY_AUTH_DEFAULT_ACCESS: "deny-all"
-
-      # IMPORTANT:
-      # NTFY_AUTH_USERS requires a bcrypt password hash.
-      #
-      # Your .env.j2 should provide:
-      #   NTFY_USER
-      #   NTFY_PASSWORD_HASH
-      #
-      # Example resulting value:
-      #   siva:$2a$10$...:user
-      # htpasswd -bnBC 10 "" 'YOUR_PASSWORD' | tr -d ':\n'
-      # Do NOT put the plaintext password here.
-      NTFY_AUTH_USERS: "${NTFY_USER}:${NTFY_PASSWORD_HASH}:user"
-
-      # Allow the user read/write access to all below topics.
-      NTFY_AUTH_ACCESS: "${NTFY_USER}:proxmox_alerts:rw,${NTFY_USER}:docker_alerts:rw,${NTFY_USER}:system_alerts:rw"
-      
+      # NTFY_AUTH_USERS / NTFY_AUTH_TOKENS come from /secrets/ntfy.env
+      NTFY_AUTH_ACCESS: "${NTFY_USER:-siva}:proxmox_alerts:rw,${NTFY_USER:-siva}:docker_alerts:rw,${NTFY_USER:-siva}:system_alerts:rw"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    networks:
-      - default
-      - monitoring
-
+    networks: [monitoring]
     logging:
-      driver: splunk
-      options:
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-index: docker_logs
-        splunk-sourcetype: ntfy
-        splunk-verify-connection: "false"
-        splunk-format: json
-        tag: ntfy
+      <<: *splunk
+      options: { <<: *splunk-opts, splunk-sourcetype: ntfy, tag: ntfy }
 
-
-  # ============================================================
-  # ntfy-history
-  #
-  # Converts ntfy's NDJSON /json?poll=1 response into normal
-  # JSON for Homepage customapi.
-  # ============================================================
   ntfy-history:
     build:
       context: .
       dockerfile: Dockerfile
-
     container_name: ntfy-history
     restart: unless-stopped
-
     environment:
       NTFY_URL: "http://ntfy:80"
-      NTFY_USER: "${NTFY_USER}"
+      NTFY_USER: "${NTFY_USER:-siva}"
       NTFY_PASSWORD: "${NTFY_PASSWORD}"
       PORT: "5000"
-
     ports:
       - "5000:5000"
-
     depends_on:
       ntfy:
         condition: service_healthy
-
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5000/health"]
-
+    networks: [monitoring]
     logging:
-      driver: splunk
-      options:
-        splunk-url: ${SPLUNK_HEC_URL}
-        splunk-token: ${SPLUNK_HEC_TOKEN}
-        splunk-index: docker_logs
-        splunk-sourcetype: ntfy-history
-        splunk-verify-connection: "false"
-        splunk-format: json
-        tag: ntfy-history
+      <<: *splunk
+      options: { <<: *splunk-opts, splunk-sourcetype: ntfy-history, tag: ntfy-history }
 
-    networks:
-      - default
+volumes:
+  secrets:
+    name: homelab-secrets
 
 networks:
   monitoring:
-    external: true
     name: homelab-observability

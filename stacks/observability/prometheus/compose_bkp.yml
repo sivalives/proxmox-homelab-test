@@ -1,0 +1,55 @@
+services:
+  proxmox-exporter:
+    image: prompve/prometheus-pve-exporter:latest
+    container_name: proxmox-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9221:9221"
+    environment:
+      PVE_USER: "${PVE_USER}"
+      PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
+      PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
+      PVE_VERIFY_SSL: "false"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    user: "65534:65534"
+    networks:
+      - monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config:/etc/prometheus:ro
+      - /opt/docker-data/prometheus:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    depends_on:
+      - proxmox-exporter
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config:/etc/alertmanager:ro
+      - /opt/docker-data/alertmanager:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    depends_on:
+      - prometheus
+  
+networks:
+  monitoring:
+    name: homelab-observability
+    driver: bridge

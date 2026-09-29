@@ -1,0 +1,1 @@
+chown -R 65534:65534 /opt/docker-data/prometheus

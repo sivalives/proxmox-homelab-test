@@ -1,0 +1,125 @@
+services:
+
+  # ============================================================
+  # ntfy
+  # ============================================================
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    command: serve
+    restart: unless-stopped
+
+    ports:
+      - "8080:80"
+
+    volumes:
+      - /opt/docker-data/ntfy/cache:/var/cache/ntfy
+      - /opt/docker-data/ntfy/etc:/etc/ntfy
+      - ./templates:/etc/ntfy/templates:ro
+
+    environment:
+      # ----------------------------------------------------------
+      # Server
+      # ----------------------------------------------------------
+      NTFY_BASE_URL: "http://ntfy.lan"
+      NTFY_LISTEN_HTTP: "0.0.0.0:80"
+      NTFY_BEHIND_PROXY: "true"
+
+      # ----------------------------------------------------------
+      # Message cache
+      # ----------------------------------------------------------
+      NTFY_CACHE_FILE: "/var/cache/ntfy/cache.db"
+      NTFY_CACHE_DURATION: "7d"
+
+      # ----------------------------------------------------------
+      # Authentication
+      # ----------------------------------------------------------
+      NTFY_AUTH_FILE: "/etc/ntfy/user.db"
+      NTFY_AUTH_DEFAULT_ACCESS: "deny-all"
+
+      # IMPORTANT:
+      # NTFY_AUTH_USERS requires a bcrypt password hash.
+      #
+      # Your .env.j2 should provide:
+      #   NTFY_USER
+      #   NTFY_PASSWORD_HASH
+      #
+      # Example resulting value:
+      #   siva:$2a$10$...:user
+      # htpasswd -bnBC 10 "" 'YOUR_PASSWORD' | tr -d ':\n'
+      # Do NOT put the plaintext password here.
+      NTFY_AUTH_USERS: "${NTFY_USER}:${NTFY_PASSWORD_HASH}:user"
+
+      # Allow the user read/write access to all below topics.
+      NTFY_AUTH_ACCESS: "${NTFY_USER}:proxmox_alerts:rw,${NTFY_USER}:docker_alerts:rw,${NTFY_USER}:system_alerts:rw"
+      
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - default
+      - monitoring
+
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ntfy
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ntfy
+
+
+  # ============================================================
+  # ntfy-history
+  #
+  # Converts ntfy's NDJSON /json?poll=1 response into normal
+  # JSON for Homepage customapi.
+  # ============================================================
+  ntfy-history:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ntfy-history
+    restart: unless-stopped
+
+    environment:
+      NTFY_URL: "http://ntfy:80"
+      NTFY_USER: "${NTFY_USER}"
+      NTFY_PASSWORD: "${NTFY_PASSWORD}"
+      PORT: "5000"
+
+    ports:
+      - "5000:5000"
+
+    depends_on:
+      ntfy:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5000/health"]
+
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: ntfy-history
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: ntfy-history
+
+    networks:
+      - default
+
+networks:
+  monitoring:
+    external: true
+    name: homelab-observability
