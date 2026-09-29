@@ -1,41 +1,10 @@
-name: observability
-
-# Consumer stack: attaches to the network + secrets volume created by the
-# ntfy stack. Its own init fixes data-dir permissions and blocks until ntfy
-# is healthy and the alertmanager token exists (depends_on can't cross
-# projects, so init does the cross-stack wait).
-#   cd observability && docker compose up -d
-
 services:
-
-  init:
-    image: busybox:stable
-    container_name: observability-init
-    restart: "no"
-    user: "0:0"
-    entrypoint: ["sh", "-ec"]
-    command:
-      - |
-        mkdir -p /data/prometheus /data/alertmanager
-        chown -R 65534:65534 /data/prometheus /data/alertmanager
-
-        i=0
-        until [ -s /secrets/alertmanager_token ] && wget -q -O /dev/null --spider http://ntfy:80/v1/health; do
-          i=$$((i+1))
-          [ $$i -le 60 ] || { echo "ntfy not ready after 120s - is the ntfy stack up?" >&2; exit 1; }
-          sleep 2
-        done
-        echo "permissions ready, ntfy healthy"
-    volumes:
-      - /opt/docker-data:/data
-      - secrets:/secrets:ro
-    networks: [monitoring]
-
   proxmox-exporter:
     image: prompve/prometheus-pve-exporter:latest
     container_name: proxmox-exporter
     restart: unless-stopped
-    networks: [monitoring]
+    networks:
+      - monitoring
     ports:
       - "9221:9221"
     environment:
@@ -49,7 +18,8 @@ services:
     container_name: prometheus
     restart: unless-stopped
     user: "65534:65534"
-    networks: [monitoring]
+    networks:
+      - monitoring
     ports:
       - "9090:9090"
     volumes:
@@ -60,38 +30,26 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
     depends_on:
-      init:
-        condition: service_completed_successfully
-      proxmox-exporter:
-        condition: service_started
+      - proxmox-exporter
 
   alertmanager:
     image: prom/alertmanager:latest
     container_name: alertmanager
     restart: unless-stopped
-    user: "65534:65534"
-    networks: [monitoring]
+    networks:
+      - monitoring
     ports:
       - "9093:9093"
     volumes:
       - ./config:/etc/alertmanager:ro
       - /opt/docker-data/alertmanager:/alertmanager
-      - secrets:/secrets:ro
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
     depends_on:
-      init:
-        condition: service_completed_successfully
-      prometheus:
-        condition: service_started
-
-volumes:
-  secrets:
-    external: true
-    name: homelab-secrets
-
+      - prometheus
+  
 networks:
   monitoring:
-    external: true
     name: homelab-observability
+    driver: bridge
