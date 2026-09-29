@@ -1,1 +1,11 @@
+# On observability host
+cd /opt   # or wherever your compose files live
+
+# Add ntfy token for user "siva" AND UPDATE in NTFY_TOKEN in openbao
+docker exec -it ntfy ntfy token add siva
+
+# Fix Prometheus data directory ownership
 chown -R 65534:65534 /opt/docker-data/prometheus
+
+docker compose -f ntfy/docker-compose.yml up -d
+docker compose -f prometheus/docker-compose.yml up -d   # adjust path if different
