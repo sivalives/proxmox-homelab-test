@@ -6,11 +6,9 @@ services:
     user: "0:0"
     restart: unless-stopped
     volumes:
-      - /opt/splunk-data:/opt/splunk/var
-      - /opt/splunk-apps:/opt/splunk/etc/apps
-      #You have to map each splunk app explicity here
+      - /opt/splunk-var:/opt/splunk/var
+      - /opt/splunk-etc:/opt/splunk/etc
       - ./apps/homelab_base:/opt/splunk/etc/apps/homelab_base
-
     ports:
       - "8000:8000"
       - "8088:8088"
