@@ -48,7 +48,7 @@ services:
       #   siva:$2a$10$...:user
       # htpasswd -bnBC 10 "" 'YOUR_PASSWORD' | tr -d ':\n'
       # Do NOT put the plaintext password here.
-      NTFY_AUTH_USERS: "${NTFY_USER}:${NTFY_PASSWORD_HASH}:user"
+      NTFY_AUTH_USERS: "${NTFY_AUTH_USER_ENTRY}"
 
       # Allow the user read/write access to all below topics.
       NTFY_AUTH_ACCESS: "${NTFY_USER}:proxmox_alerts:rw,${NTFY_USER}:docker_alerts:rw,${NTFY_USER}:system_alerts:rw"
