@@ -214,7 +214,7 @@
 
 - name: Deploy with Docker Compose
   ansible.builtin.command:
-    cmd: docker compose up -d
+    cmd: docker compose up -d --force-recreate
     chdir: "{{ compose_dir }}"
   register: compose_up
   changed_when: compose_up.rc == 0
@@ -246,7 +246,7 @@
 
 - name: Show Compose project status
   ansible.builtin.command:
-    cmd: docker compose ps --force-recreate
+    cmd: docker compose ps
     chdir: "{{ compose_dir }}"
   register: compose_status
   changed_when: false
