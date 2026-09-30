@@ -246,7 +246,7 @@
 
 - name: Show Compose project status
   ansible.builtin.command:
-    cmd: docker compose ps
+    cmd: docker compose ps --force-recreate
     chdir: "{{ compose_dir }}"
   register: compose_status
   changed_when: false
