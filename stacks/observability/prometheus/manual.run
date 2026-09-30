@@ -4,6 +4,16 @@ cd /opt   # or wherever your compose files live
 # Add ntfy token for user "siva" AND UPDATE in NTFY_TOKEN in openbao
 docker exec -it ntfy ntfy token add siva
 
+#Test alerts using new token : 
+curl -i \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d "test from alertmanager" \
+  http://localhost:8080/proxmox_alerts
+
+curl -i  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d "test from alertmanager" \
+    http://192.168.1.108:8080/proxmox_alerts
+
 # Fix Prometheus data directory ownership
 chown -R 65534:65534 /opt/docker-data/prometheus
 
