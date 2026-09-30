@@ -13,8 +13,8 @@ services:
       - "8080:80"
 
     volumes:
-      - /opt/docker-data/ntfy/cache:/var/cache/ntfy
-      - /opt/docker-data/ntfy/etc:/etc/ntfy
+      - /opt/observability-data/ntfy/cache:/var/cache/ntfy
+      - /opt/observability-data/ntfy/etc:/etc/ntfy
       - ./templates:/etc/ntfy/templates:ro
 
     environment:

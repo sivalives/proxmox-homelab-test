@@ -24,7 +24,7 @@ services:
       - "9090:9090"
     volumes:
       - ./config:/etc/prometheus:ro
-      - /opt/docker-data/prometheus:/prometheus
+      - /opt/observability-data/prometheus:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -42,7 +42,7 @@ services:
       - "9093:9093"
     volumes:
       - ./config:/etc/alertmanager:ro
-      - /opt/docker-data/alertmanager:/alertmanager
+      - /opt/observability-data/alertmanager:/alertmanager
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager

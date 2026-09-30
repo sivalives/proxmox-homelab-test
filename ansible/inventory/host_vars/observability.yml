@@ -1,3 +1,20 @@
 # ansible/host_vars/observability.yml
 hawser_openbao_path: "secret/observability"
 docker_data_mount: /opt/observability-data
+
+#control app permissions via ansible
+app_storage:
+  - path: "{{ docker_data_mount }}/prometheus"
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+
+  - path: "{{ docker_data_mount }}/alertmanager"
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+
+  - path: "{{ docker_data_mount }}/proxmox-exporter"
+    owner: "101"
+    group: "101"
+    mode: "0755"
