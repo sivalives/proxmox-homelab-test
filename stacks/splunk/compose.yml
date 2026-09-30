@@ -3,6 +3,7 @@ services:
     image: splunk/splunk:9.4.12
     container_name: splunk
     hostname: splunk
+    user: "0:0"
     restart: unless-stopped
     volumes:
       - /opt/splunk-data:/opt/splunk/var
