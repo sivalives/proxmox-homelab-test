@@ -62,7 +62,7 @@ USER_AGENT = os.getenv(
 
 HEADERS = {
     "User-Agent": USER_AGENT,
-    "Accept": "*/*",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
     "Origin": "https://www.filmon.com",
     "Referer": "https://www.filmon.com/",
     "X-Requested-With": "XMLHttpRequest",
@@ -76,20 +76,54 @@ channels: list = []
 stats: Counter = Counter()
 
 
+_local = threading.local()
+WARMUP_URL = os.getenv("FILMON_WARMUP_URL", "https://www.filmon.com/tv/bbc-news")
+_logged_cookies = False
+
+
+def new_session() -> requests.Session:
+    """A fresh session that first visits a FilmOn page, like a browser, so FilmOn can
+    hand out its normal guest session cookies. Skipped if you supply FILMON_COOKIE."""
+    global _logged_cookies
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    if not FILMON_COOKIE:
+        try:
+            s.get(WARMUP_URL, timeout=15)
+        except Exception as e:
+            print(f"Warm-up request failed: {e!r}")
+        if not _logged_cookies:
+            _logged_cookies = True
+            print(f"Session cookies received from warm-up: {sorted(s.cookies.keys())}")
+    return s
+
+
+def get_session() -> requests.Session:
+    if not hasattr(_local, "s"):
+        _local.s = new_session()
+    return _local.s
+
+
 def get_channel_data(n: int, quality: str = "high"):
     """Returns the channel dict from FilmOn, or None on any failure."""
-    try:
-        r = requests.post(API_URL, data={"channel_id": n, "quality": quality},
-                          headers=HEADERS, timeout=15)
-        if r.status_code in (404, 405):  # fall back to GET if POST isn't accepted
-            r = requests.get(API_URL, params={"channel_id": n, "quality": quality},
-                             headers=HEADERS, timeout=15)
-        j = r.json()
-    except Exception as e:
-        if stats["request_failed"] < 3:
-            print(f"Request for channel {n} failed: {e!r}")
-        stats["request_failed"] += 1
-        return None
+    j = None
+    for attempt in (1, 2):
+        try:
+            s = get_session()
+            r = s.post(API_URL, data={"channel_id": n, "quality": quality}, timeout=15)
+            if r.status_code in (404, 405):  # fall back to GET if POST isn't accepted
+                r = s.get(API_URL, params={"channel_id": n, "quality": quality}, timeout=15)
+            j = r.json()
+        except Exception as e:
+            if stats["request_failed"] < 3:
+                print(f"Request for channel {n} failed: {e!r}")
+            stats["request_failed"] += 1
+            return None
+        if isinstance(j, dict) and j.get("streamName") == "maintenance" \
+                and attempt == 1 and not FILMON_COOKIE:
+            _local.s = new_session()  # session may have gone stale: start a new one and retry once
+            continue
+        break
     if isinstance(j, dict) and isinstance(j.get("data"), dict):
         j = j["data"]  # tolerate a {"data": {...}} wrapper
     return j if isinstance(j, dict) else None
@@ -100,8 +134,11 @@ def probe(n: int):
     if d is None:
         return None
     if not d.get("title") or not d.get("streams"):
-        stats["no_channel_or_no_streams"] += 1
-        if stats["no_channel_or_no_streams"] <= 2:
+        if d.get("streamName") == "maintenance":
+            stats["maintenance_placeholder"] += 1
+        else:
+            stats["no_channel_or_no_streams"] += 1
+        if sum(stats[k] for k in ("maintenance_placeholder", "no_channel_or_no_streams")) <= 2:
             print(f"Channel {n}: no title/streams in response: {str(d)[:200]}")
         return None
     if (SKIP_VR_EXP and d.get("is360")) or (SKIP_ADULT and d.get("is_adult")) \
