@@ -585,7 +585,7 @@ def scan_channels():
 
 FILMON_V2_API = os.getenv(
     "FILMON_V2_API",
-    "http://www.filmon.com/api-v2",
+    "https://www.filmon.com/api-v2",
 ).rstrip("/")
 
 
