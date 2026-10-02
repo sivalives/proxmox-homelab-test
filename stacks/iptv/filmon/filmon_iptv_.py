@@ -216,10 +216,15 @@ HLS_SEGMENT_CACHE_TTL = int(
     )
 )
 
+# Increased because the cache now maintains both:
+#   token -> segment
+#   seq:channel:sequence -> segment
+#
+# 4096 gives plenty of room for multiple live channels.
 HLS_SEGMENT_CACHE_MAX = int(
     os.getenv(
         "HLS_SEGMENT_CACHE_MAX",
-        "1024",
+        "4096",
     )
 )
 
@@ -985,14 +990,21 @@ _hls_urls = {}
 
 
 #
-# token -> {
-#     "body": bytes,
-#     "content_type": str,
-#     "created": float,
-#     "sequence": int | None,
-# }
+# Cache contains TWO indexes:
 #
-
+#   random token
+#       ->
+#   segment
+#
+# and:
+#
+#   seq:<channel>:<sequence>
+#       ->
+#   segment
+#
+# The sequence index is important because Jellyfin can request
+# an old segment after FilmOn has already moved its live window.
+#
 _hls_segment_cache = {}
 
 
@@ -1001,6 +1013,10 @@ def _cleanup_hls_state() -> None:
     now = time.time()
 
     with _hls_lock:
+
+        # ----------------------------------------------------
+        # HLS token cleanup
+        # ----------------------------------------------------
 
         cutoff = now - HLS_TOKEN_TTL
 
@@ -1017,6 +1033,10 @@ def _cleanup_hls_state() -> None:
                     key,
                     None,
                 )
+
+        # ----------------------------------------------------
+        # Segment cache TTL cleanup
+        # ----------------------------------------------------
 
         segment_cutoff = (
             now
@@ -1036,6 +1056,17 @@ def _cleanup_hls_state() -> None:
                     key,
                     None,
                 )
+
+        # ----------------------------------------------------
+        # Cache size cleanup
+        #
+        # Because each segment can have:
+        #
+        #   token entry
+        #   sequence entry
+        #
+        # allow HLS_SEGMENT_CACHE_MAX total entries.
+        # ----------------------------------------------------
 
         if (
             len(_hls_segment_cache)
@@ -1127,16 +1158,6 @@ def _hls_url(
         parent_variant_token,
         sequence,
     )
-
-    # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # FFmpeg's HLS demuxer expects media segment URLs to have
-    # a recognized media extension.
-    #
-    # Keep playlist/variant URLs extensionless.
-    # Give actual MPEG-TS segment URLs a .ts suffix.
-    # --------------------------------------------------------
 
     suffix = (
         ".ts"
@@ -1675,48 +1696,166 @@ def _cache_segment(
     body: bytes,
     content_type: str,
     sequence: int | None = None,
+    channel: int | None = None,
 ) -> None:
+    """
+    Store the segment under BOTH:
+
+      1. the HLS token
+      2. channel + MEDIA-SEQUENCE
+
+    The second index is critical for Jellyfin.
+
+    Jellyfin can request an older segment after FilmOn has
+    already removed that segment from its current live window.
+
+    Example:
+
+        seq:11:623337
+
+    remains available even when FilmOn has moved to:
+
+        623339-623343
+    """
+
+    now = time.time()
+
+    entry = {
+        "body": body,
+        "content_type": content_type,
+        "created": now,
+        "sequence": sequence,
+        "channel": channel,
+    }
 
     with _hls_lock:
 
-        _hls_segment_cache[token] = {
-            "body": body,
-            "content_type": content_type,
-            "created": time.time(),
-            "sequence": sequence,
-        }
+        # ----------------------------------------------------
+        # Token index
+        # ----------------------------------------------------
+
+        _hls_segment_cache[token] = dict(entry)
+
+        # ----------------------------------------------------
+        # Sequence index
+        # ----------------------------------------------------
+
+        if (
+            channel is not None
+            and sequence is not None
+        ):
+
+            cache_key = (
+                f"seq:{channel}:{sequence}"
+            )
+
+            _hls_segment_cache[cache_key] = dict(
+                entry
+            )
 
     _cleanup_hls_state()
 
 
 def _get_cached_segment(
     token: str,
+    channel: int | None = None,
 ):
+    """
+    Cache lookup order:
+
+      1. exact HLS token
+      2. channel + MEDIA-SEQUENCE
+
+    This prevents Jellyfin from forcing a FilmOn refresh
+    when the requested segment was already prefetched.
+    """
 
     with _hls_lock:
 
-        item = _hls_segment_cache.get(token)
+        now = time.time()
 
-        if not item:
-            return None
+        # ----------------------------------------------------
+        # Exact token lookup
+        # ----------------------------------------------------
 
-        if (
-            time.time()
-            - item.get("created", 0)
-        ) > HLS_SEGMENT_CACHE_TTL:
+        item = _hls_segment_cache.get(
+            token
+        )
+
+        if item:
+
+            if (
+                now
+                - item.get("created", 0)
+            ) <= HLS_SEGMENT_CACHE_TTL:
+
+                return {
+                    "body": item["body"],
+                    "content_type": item["content_type"],
+                    "sequence": item.get(
+                        "sequence"
+                    ),
+                }
 
             _hls_segment_cache.pop(
                 token,
                 None,
             )
 
-            return None
+        # ----------------------------------------------------
+        # Sequence lookup
+        # ----------------------------------------------------
 
-        return {
-            "body": item["body"],
-            "content_type": item["content_type"],
-            "sequence": item.get("sequence"),
-        }
+        if channel is not None:
+
+            hls_item = _hls_urls.get(
+                token
+            )
+
+            if hls_item:
+
+                sequence = hls_item.get(
+                    "sequence"
+                )
+
+                if sequence is not None:
+
+                    cache_key = (
+                        f"seq:{channel}:{sequence}"
+                    )
+
+                    item = (
+                        _hls_segment_cache.get(
+                            cache_key
+                        )
+                    )
+
+                    if item:
+
+                        if (
+                            now
+                            - item.get(
+                                "created",
+                                0,
+                            )
+                        ) <= HLS_SEGMENT_CACHE_TTL:
+
+                            return {
+                                "body": item["body"],
+                                "content_type": item[
+                                    "content_type"
+                                ],
+                                "sequence": item.get(
+                                    "sequence"
+                                ),
+                            }
+
+                        _hls_segment_cache.pop(
+                            cache_key,
+                            None,
+                        )
+
+    return None
 
 
 # ============================================================
@@ -1732,6 +1871,10 @@ def _prefetch_segments(
     """
     Immediately download the segments advertised by the
     current media playlist.
+
+    Each segment is stored by BOTH:
+      - random HLS token
+      - channel + MEDIA-SEQUENCE
     """
 
     if not segment_tokens:
@@ -1741,9 +1884,23 @@ def _prefetch_segments(
 
         token, sequence, upstream_url = item
 
-        cached = _get_cached_segment(token)
+        # ----------------------------------------------------
+        # Check cache FIRST.
+        # ----------------------------------------------------
+
+        cached = _get_cached_segment(
+            token,
+            channel,
+        )
 
         if cached:
+
+            print(
+                f"HLS: segment already cached "
+                f"channel={channel} "
+                f"sequence={sequence}"
+            )
+
             return
 
         try:
@@ -1785,6 +1942,7 @@ def _prefetch_segments(
                 r.content,
                 content_type,
                 sequence=sequence,
+                channel=channel,
             )
 
             print(
@@ -2193,15 +2351,30 @@ def stream(n: int):
 # HLS PROXY
 # ============================================================
 
-@app.get("/hls/<int:n>/<token>")
-@app.get("/hls/<int:n>/<token>.ts")
+@app.get("/hls/<int:n>/<path:token>")
 def hls_proxy(
     n: int,
     token: str,
 ):
 
-    # Flask's route for /token.ts passes the token without
-    # the .ts suffix because .ts is part of the route pattern.
+    # --------------------------------------------------------
+    # Strip .ts suffix.
+    #
+    # The route uses <path:token> so both:
+    #
+    #   /hls/11/abc
+    #
+    # and:
+    #
+    #   /hls/11/abc.ts
+    #
+    # work.
+    # --------------------------------------------------------
+
+    if token.endswith(".ts"):
+
+        token = token[:-3]
+
     item = _get_hls_item(
         n,
         token,
@@ -2219,16 +2392,28 @@ def hls_proxy(
     # ========================================================
     # SEGMENT
     #
-    # FIRST attempt = local cache.
+    # CRITICAL:
+    #
+    # ALWAYS check local cache BEFORE contacting FilmOn.
+    #
+    # This allows Jellyfin to request an older segment after
+    # FilmOn has already removed it from its live window.
     # ========================================================
 
     if kind == "segment":
 
         cached = _get_cached_segment(
-            token
+            token,
+            n,
         )
 
         if cached:
+
+            print(
+                f"HLS: serving cached segment "
+                f"channel={n} "
+                f"sequence={cached.get('sequence')}"
+            )
 
             return Response(
                 cached["body"],
@@ -2336,6 +2521,42 @@ def hls_proxy(
 
         elif kind == "segment":
 
+            # ------------------------------------------------
+            # Check cache AGAIN before attempting an expensive
+            # parent playlist refresh.
+            #
+            # Another request may have prefetched the segment
+            # while this request was waiting.
+            # ------------------------------------------------
+
+            cached = _get_cached_segment(
+                token,
+                n,
+            )
+
+            if cached:
+
+                print(
+                    f"HLS: cache became available "
+                    f"channel={n} "
+                    f"sequence={cached.get('sequence')}"
+                )
+
+                return Response(
+                    cached["body"],
+                    content_type=(
+                        cached["content_type"]
+                        or "video/mp2t"
+                    ),
+                    headers={
+                        "Cache-Control":
+                            "no-store, "
+                            "no-cache, "
+                            "must-revalidate, "
+                            "max-age=0",
+                    },
+                )
+
             upstream_url = (
                 _refresh_segment_from_parent(
                     n,
@@ -2358,13 +2579,27 @@ def hls_proxy(
         or r.status_code != 200
     ):
 
+        # ----------------------------------------------------
+        # FINAL CACHE CHECK.
+        #
+        # This is intentionally before returning 502.
+        # ----------------------------------------------------
+
         if kind == "segment":
 
             cached = _get_cached_segment(
-                token
+                token,
+                n,
             )
 
             if cached:
+
+                print(
+                    f"HLS: serving cached segment "
+                    f"after upstream failure "
+                    f"channel={n} "
+                    f"sequence={cached.get('sequence')}"
+                )
 
                 return Response(
                     cached["body"],
@@ -2399,6 +2634,31 @@ def hls_proxy(
             f"channel={n} "
             f"kind={kind}"
         )
+
+        # If this was a segment, one final cache check.
+        if kind == "segment":
+
+            cached = _get_cached_segment(
+                token,
+                n,
+            )
+
+            if cached:
+
+                return Response(
+                    cached["body"],
+                    content_type=(
+                        cached["content_type"]
+                        or "video/mp2t"
+                    ),
+                    headers={
+                        "Cache-Control":
+                            "no-store, "
+                            "no-cache, "
+                            "must-revalidate, "
+                            "max-age=0",
+                    },
+                )
 
         abort(502)
 
@@ -2466,6 +2726,7 @@ def hls_proxy(
             body,
             content_type or "video/mp2t",
             sequence=item.get("sequence"),
+            channel=n,
         )
 
     return Response(
