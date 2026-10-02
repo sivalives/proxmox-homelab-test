@@ -9,19 +9,21 @@ services:
       # Address Jellyfin uses to reach THIS container. Use the LXC's IP (or a shared
       # docker network + service name, e.g. http://filmon-iptv:8765).
       PUBLIC_BASE_URL: "http://192.168.1.107:8765"   # <-- change to your LXC IP
-
       HLS_SEGMENT_CACHE_MAX: "4096"
       HLS_PREFETCH_WORKERS: "8"
       HLS_BACKGROUND_INTERVAL: "2"
-      HLS_PREFETCH_ENABLED: false          # never block the playlist
+      HLS_PREFETCH_ENABLED: "false"          # never block the playlist
       HLS_UPSTREAM_REFRESH: "10"
       HLS_TIMEOUT: "12"
       HLS_RETRY_COUNT: "2"
       HLS_SEGMENT_CACHE_TTL: "300"
-      PREFERRED_QUALITY: "high"              # or low if you want less transcoding pressure
-      FREE_ONLY: false          # include paid channels (default)
-      HD_ONLY: true             # only channels with high quality
-      SKIP_ADULT: false
+      PREFERRED_QUALITY: "high"              # serve high quality when available
+      FREE_ONLY: "false"                     # include paid + free channels
+      HD_ONLY: "false"                       # get every channel that has a stream
+      SKIP_ADULT: "false"
+      SKIP_VR_EXP: "false"
+      SKIP_VOD_VOX: "false"
+      MAX_CHANNEL_ID: "4000"                 # catch higher channel IDs
 
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
