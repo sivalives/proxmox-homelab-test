@@ -19,6 +19,9 @@ services:
       HLS_RETRY_COUNT: "2"
       HLS_SEGMENT_CACHE_TTL: "300"
       PREFERRED_QUALITY: "high"              # or low if you want less transcoding pressure
+      FREE_ONLY: false          # include paid channels (default)
+      HD_ONLY: true             # only channels with high quality
+      SKIP_ADULT: false
 
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
