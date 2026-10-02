@@ -1,3 +1,4 @@
+
 import os
 import re
 import time
@@ -70,6 +71,8 @@ USER_AGENT = os.getenv(
     "FILMON_USER_AGENT",
     "Mozilla/5.0",
 )
+
+PREFERRED_QUALITY = os.getenv("PREFERRED_QUALITY", "480p")
 
 # ============================================================
 # Logging
@@ -580,86 +583,152 @@ def scan_channels():
 # FilmOn stream URL
 # ============================================================
 
-def _get_stream_url(channel):
-    """
-    Get a fresh FilmOn HLS master URL.
+FILMON_V2_API = os.getenv(
+    "FILMON_V2_API",
+    "http://www.filmon.com/api-v2",
+).rstrip("/")
 
-    This function intentionally returns the MASTER playlist.
-    Variant selection happens separately.
+
+def get_channel_data(channel: int, quality=None) -> dict | None:
+    """
+    Get current FilmOn channel data from the API-v2 endpoint.
+
+    IMPORTANT:
+        Do NOT use /tv/api/channel/{id} here. That legacy API
+        requires a session_key and returns:
+            400 Session Key Missed
+
+        API-v2 exposes the channel streams directly and is the
+        endpoint used by the current FilmOn HLS workflow.
     """
 
     session = get_session()
 
-    attempts = max(1, HLS_RETRY_COUNT)
+    params = {
+        "protocol": "hls",
+    }
 
     last_error = None
 
-    for attempt in range(1, attempts + 1):
+    for attempt in range(1, max(1, HLS_RETRY_COUNT) + 1):
         try:
-            # Common FilmOn stream endpoint.
-            #
-            # Keep the request flexible because FilmOn's API
-            # response structure has changed historically.
-
-            possible_paths = [
-                f"channel/{channel}",
-                f"channel/{channel}/stream",
-                f"streams/{channel}",
-            ]
-
-            for path in possible_paths:
-                try:
-                    data = _filmon_request(path)
-
-                    urls = _find_urls_in_json(data)
-
-                    for url in urls:
-                        lower = url.lower()
-
-                        if (
-                            ".m3u8" in lower
-                            or "m3u8" in lower
-                        ):
-                            return url
-
-                except Exception:
-                    continue
-
-            # Fallback direct endpoint.
             response = session.get(
-                f"{FILMON_API}/channel/{channel}",
-                params={"channel_id": channel},
+                f"{FILMON_V2_API}/channel/{int(channel)}",
+                params=params,
                 timeout=HLS_TIMEOUT,
+                allow_redirects=True,
             )
 
-            response.raise_for_status()
+            if response.status_code != 200:
+                try:
+                    payload = response.json()
+                    message = (
+                        payload.get("message")
+                        or payload.get("error")
+                        or payload.get("status")
+                    )
+                except Exception:
+                    message = response.text[:200]
 
-            data = response.json()
+                raise RuntimeError(
+                    f"FilmOn API-v2 HTTP {response.status_code}: "
+                    f"{message}"
+                )
 
-            urls = _find_urls_in_json(data)
+            payload = response.json()
 
-            for url in urls:
-                lower = url.lower()
+            # API-v2 normally returns:
+            # {
+            #   "code": 200,
+            #   "data": {
+            #       "id": ...,
+            #       "streams": [...]
+            #   }
+            # }
+            data = payload.get("data")
 
-                if (
-                    ".m3u8" in lower
-                    or "m3u8" in lower
-                ):
-                    return url
+            if not isinstance(data, dict):
+                # Be tolerant if the endpoint returns the channel
+                # object directly.
+                data = payload if isinstance(payload, dict) else None
 
-            raise RuntimeError(
-                "No HLS master URL found"
-            )
+            if not data:
+                raise RuntimeError(
+                    "FilmOn API-v2 returned no channel data"
+                )
+
+            streams = data.get("streams")
+
+            if not isinstance(streams, list) or not streams:
+                raise RuntimeError(
+                    f"FilmOn channel {channel} returned no HLS streams"
+                )
+
+            return data
 
         except Exception as exc:
             last_error = exc
 
-            if attempt < attempts:
+            if attempt < max(1, HLS_RETRY_COUNT):
                 time.sleep(0.4 * attempt)
 
     raise RuntimeError(
-        f"Unable to get FilmOn stream URL: {last_error}"
+        f"Unable to get FilmOn channel data: {last_error}"
     )
+
+
+def _get_stream_url(channel: int) -> str | None:
+    """
+    Get a fresh FilmOn HLS MASTER playlist URL.
+
+    API-v2 returns the channel data containing a streams array.
+    Select the preferred quality and return its URL.
+    """
+
+    d = get_channel_data(
+        channel,
+        PREFERRED_QUALITY,
+    )
+
+    if not d:
+        return None
+
+    streams = d.get("streams")
+
+    if not streams:
+        return None
+
+    pick = next(
+        (
+            s
+            for s in streams
+            if s.get("quality") == PREFERRED_QUALITY
+            and s.get("url")
+        ),
+        next(
+            (
+                s
+                for s in streams
+                if s.get("url")
+            ),
+            None,
+        ),
+    )
+
+    if not pick:
+        return None
+
+    url = pick.get("url")
+
+    if not url:
+        return None
+
+    if "m3u8" not in url.lower():
+        raise RuntimeError(
+            f"FilmOn returned a non-HLS stream URL: {url}"
+        )
+
+    return url
 
 
 def _find_urls_in_json(value):
