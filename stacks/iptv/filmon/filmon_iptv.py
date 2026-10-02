@@ -1101,6 +1101,47 @@ def guide():
 # ============================================================
 # Stable HLS entry point
 # ============================================================
+#
+# For Jellyfin we deliberately return a *single* preferred-quality
+# media playlist instead of a master.  Masters cause constant token
+# churn and an extra network hop that triggers levelLoadTimeOut.
+# ============================================================
+
+def _pick_preferred_variant(master_url: str, master_body: str) -> str | None:
+    """
+    Choose the best media-playlist URL from a master.
+    Preference order:
+      1. quality matching PREFERRED_QUALITY (high / low / 480p …)
+      2. highest bandwidth
+      3. first variant
+    """
+    variants = _get_variant_urls(master_url, master_body)
+    if not variants:
+        # Upstream already gave us a media playlist
+        if "#EXTINF:" in master_body or "#EXT-X-MEDIA-SEQUENCE:" in master_body:
+            return master_url
+        return None
+
+    # Try to match by resolution / bandwidth heuristics
+    preferred = PREFERRED_QUALITY.lower()
+    scored = []
+    for v in variants:
+        inf = v.get("inf", "").lower()
+        score = 0
+        if preferred in ("high", "720", "720p", "hd") and ("720" in inf or "900x720" in inf or "1280x720" in inf):
+            score = 100
+        elif preferred in ("low", "360", "360p", "sd") and ("360" in inf or "450x360" in inf):
+            score = 100
+        elif preferred in ("480", "480p") and ("480" in inf or "600x480" in inf):
+            score = 100
+        # bandwidth as secondary sort key
+        m = re.search(r"BANDWIDTH=(\d+)", v.get("inf", ""))
+        bw = int(m.group(1)) if m else 0
+        scored.append((score, bw, v["url"]))
+
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return scored[0][2]
+
 
 @app.get("/stream/<int:n>.m3u8")
 def stream(n: int):
@@ -1109,6 +1150,7 @@ def stream(n: int):
         if not master_url:
             abort(404)
 
+        # 1. Fetch master (or direct media playlist)
         response = _fetch_upstream(master_url)
         if response.status_code != 200:
             return Response(
@@ -1125,11 +1167,52 @@ def stream(n: int):
                 mimetype="text/plain",
             )
 
+        # 2. If this is already a media playlist, just rewrite segments
+        is_media = (
+            "#EXT-X-MEDIA-SEQUENCE:" in body
+            or "#EXTINF:" in body
+        )
+
+        if is_media:
+            media_url = master_url
+            media_body = body
+            parent_token = None
+        else:
+            # 3. Pick preferred variant and fetch the media playlist
+            media_url = _pick_preferred_variant(master_url, body)
+            if not media_url:
+                return Response(
+                    "No usable variant found\n",
+                    status=502,
+                    mimetype="text/plain",
+                )
+
+            media_resp = _fetch_upstream(media_url)
+            if media_resp.status_code != 200:
+                return Response(
+                    "Upstream media playlist unavailable\n",
+                    status=502,
+                    mimetype="text/plain",
+                )
+            media_body = media_resp.text
+
+            # Create a stable-ish parent variant token so segment
+            # refreshes can re-resolve the exact MEDIA-SEQUENCE.
+            parent_token = _hls_token(
+                channel=n,
+                url=media_url,
+                kind="variant",
+                variant_index=0,
+            )
+
+        # 4. Rewrite segment URLs to stable local tokens
         rewritten = _rewrite_hls_manifest(
             channel=n,
-            manifest_url=master_url,
-            body=body,
+            manifest_url=media_url,
+            body=media_body,
+            parent_variant_token=parent_token,
         )
+
         encoded = rewritten.encode("utf-8")
         return Response(
             encoded,
@@ -1143,7 +1226,7 @@ def stream(n: int):
             },
         )
     except Exception as exc:
-        log.exception("HLS master failed channel=%s", n)
+        log.exception("HLS stream failed channel=%s", n)
         return Response(
             f"HLS error: {exc}\n",
             status=502,
