@@ -14,9 +14,8 @@ services:
       HLS_TOKEN_TTL: "86400"
       HLS_TIMEOUT: "15"
       HLS_RETRY_COUNT: "2"
-
-      HLS_SEGMENT_CACHE_TTL: "120"
-      HLS_SEGMENT_CACHE_MAX: "512"
+      HLS_SEGMENT_CACHE_TTL: "300"
+      HLS_SEGMENT_CACHE_MAX: "4096"
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
       - /opt/jellyfin-data/filmon-iptv-data:/data
