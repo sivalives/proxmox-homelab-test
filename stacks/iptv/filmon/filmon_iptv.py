@@ -1,4 +1,3 @@
-
 import os
 import re
 import time
@@ -51,6 +50,9 @@ HLS_SEGMENT_CACHE_MAX = int(
 # The old implementation downloaded the complete live window
 # before returning the playlist. That delayed FFmpeg/Jellyfin
 # enough to fall behind the live window.
+#
+# Prefetch is disabled by default and is ONLY executed when
+# explicitly enabled.
 HLS_PREFETCH_ENABLED = os.getenv(
     "HLS_PREFETCH_ENABLED",
     "false",
@@ -1532,6 +1534,13 @@ def _background_prefetch(
     body,
     parent_variant_token,
 ):
+    # --------------------------------------------------------
+    # HARD GUARD:
+    #
+    # This function must never do anything when prefetch is
+    # disabled.
+    # --------------------------------------------------------
+
     if not HLS_PREFETCH_ENABLED:
         return
 
@@ -1856,8 +1865,6 @@ def hls_proxy(n, token):
         "playlist",
         "variant",
     ):
-        force_refresh = False
-
         upstream_url = item.get("url")
 
         if not upstream_url:
@@ -1891,7 +1898,6 @@ def hls_proxy(n, token):
 
                 if refreshed:
                     upstream_url = refreshed
-                    force_refresh = True
 
                     try:
                         response = _fetch_upstream(
@@ -1952,7 +1958,12 @@ def hls_proxy(n, token):
         # ----------------------------------------------------
         # Optional NON-BLOCKING prefetch.
         #
-        # Disabled by default.
+        # This is guarded in BOTH places:
+        #
+        # 1. here at the call site
+        # 2. inside _background_prefetch()
+        #
+        # Therefore PREFETCH=false means NO PREFETCH.
         # ----------------------------------------------------
 
         if (
