@@ -9,10 +9,14 @@ services:
       # Address Jellyfin uses to reach THIS container. Use the LXC's IP (or a shared
       # docker network + service name, e.g. http://filmon-iptv:8765).
       PUBLIC_BASE_URL: "http://192.168.1.107:8765"   # <-- change to your LXC IP
-      M3U_OUT_PATH: /iptv/filmon.m3u
-      REFRESH_HOURS: "24"
-      # SKIP_ADULT: "true"
-      # PREFERRED_QUALITY: "high"
+
+      HLS_UPSTREAM_REFRESH: "30"
+      HLS_TOKEN_TTL: "86400"
+      HLS_TIMEOUT: "15"
+      HLS_RETRY_COUNT: "2"
+
+      HLS_SEGMENT_CACHE_TTL: "120"
+      HLS_SEGMENT_CACHE_MAX: "512"
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
       - /opt/jellyfin-data/filmon-iptv-data:/data
