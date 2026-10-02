@@ -7,6 +7,7 @@ FilmOn -> Jellyfin helper (new site API).
 - Serves /stream/<id>.m3u8 with a stable local URL
 - Proxies nested HLS playlists and media segments
 - Continuously refreshes short-lived FilmOn stream URLs
+- Refreshes expired HLS media segments through their parent variant playlist
 - Builds an XMLTV EPG guide
 
 This only fetches what FilmOn itself serves to your session. It does not remove
@@ -1096,6 +1097,7 @@ _hls_lock = threading.Lock()
 #     "last_refresh": float,
 #     "kind": "playlist" | "variant" | "segment",
 #     "variant_index": int | None,
+#     "parent_variant_token": str | None,
 # }
 #
 
@@ -1193,6 +1195,7 @@ def _hls_token(
     url: str,
     kind: str = "unknown",
     variant_index: int | None = None,
+    parent_variant_token: str | None = None,
 ) -> str:
 
     token = uuid.uuid4().hex
@@ -1208,6 +1211,7 @@ def _hls_token(
             "last_refresh": now,
             "kind": kind,
             "variant_index": variant_index,
+            "parent_variant_token": parent_variant_token,
         }
 
     _cleanup_hls_state()
@@ -1220,6 +1224,7 @@ def _hls_url(
     url: str,
     kind: str | None = None,
     variant_index: int | None = None,
+    parent_variant_token: str | None = None,
 ) -> str:
 
     if kind is None:
@@ -1244,6 +1249,7 @@ def _hls_url(
         url,
         kind,
         variant_index,
+        parent_variant_token,
     )
 
     return (
@@ -1325,13 +1331,6 @@ def _get_variant_urls(
     body: str,
 ) -> list[str]:
 
-    """
-    Extract variant playlist URLs from an HLS master playlist.
-
-    Every #EXT-X-STREAM-INF line is followed by its
-    corresponding variant URI.
-    """
-
     variants = []
 
     lines = body.splitlines()
@@ -1343,7 +1342,6 @@ def _get_variant_urls(
         stripped = line.strip()
 
         if not stripped:
-
             continue
 
         if stripped.startswith(
@@ -1351,13 +1349,11 @@ def _get_variant_urls(
         ):
 
             waiting_for_variant = True
-
             continue
 
         if waiting_for_variant:
 
             if stripped.startswith("#"):
-
                 continue
 
             variants.append(
@@ -1388,7 +1384,6 @@ def _refresh_hls_session(
     )
 
     if not item:
-
         return None
 
     now = time.time()
@@ -1414,13 +1409,6 @@ def _refresh_hls_session(
 
     # --------------------------------------------------------
     # VARIANT PLAYLIST
-    #
-    # IMPORTANT:
-    #
-    # Never replace a variant playlist URL with the master
-    # playlist URL.
-    #
-    # Get a fresh master and select the same variant index.
     # --------------------------------------------------------
 
     if kind == "variant":
@@ -1522,9 +1510,6 @@ def _refresh_hls_session(
 
     # --------------------------------------------------------
     # ROOT / MASTER PLAYLIST
-    #
-    # This is the only playlist type that should directly
-    # use _get_stream_url().
     # --------------------------------------------------------
 
     if kind == "playlist":
@@ -1534,7 +1519,6 @@ def _refresh_hls_session(
         )
 
         if not fresh_url:
-
             return None
 
         if not _update_hls_url(
@@ -1547,11 +1531,222 @@ def _refresh_hls_session(
 
         return fresh_url
 
+    return item["url"]
+
+
+# ============================================================
+# HLS SEGMENT REFRESH
+# ============================================================
+
+def _refresh_segment_from_parent(
+    channel: int,
+    segment_token: str,
+):
+    """
+    A FilmOn media segment can expire while Jellyfin still
+    has the local stable token.
+
+    When that happens:
+
+        old segment -> 403
+
+    We refresh the parent variant playlist, obtain its current
+    segment list, and update the stable segment token to a
+    fresh upstream segment URL.
+
+    We first try to match the original segment path. If FilmOn
+    has already rotated that segment out of the live window,
+    we use the newest currently advertised segment.
+    """
+
+    item = _get_hls_item(
+        channel,
+        segment_token,
+    )
+
+    if not item:
+        return None
+
+    parent_token = item.get(
+        "parent_variant_token"
+    )
+
+    if not parent_token:
+
+        print(
+            f"HLS: segment has no parent variant "
+            f"channel={channel} "
+            f"token={segment_token}"
+        )
+
+        return None
+
+    parent = _get_hls_item(
+        channel,
+        parent_token,
+    )
+
+    if not parent:
+
+        print(
+            f"HLS: parent variant token missing "
+            f"channel={channel} "
+            f"parent={parent_token}"
+        )
+
+        return None
+
     # --------------------------------------------------------
-    # Everything else
+    # Force refresh the parent variant.
     # --------------------------------------------------------
 
-    return item["url"]
+    variant_url = _refresh_hls_session(
+        channel,
+        parent_token,
+        force=True,
+    )
+
+    if not variant_url:
+
+        print(
+            f"HLS: unable to refresh parent "
+            f"variant channel={channel}"
+        )
+
+        return None
+
+    try:
+
+        r = _fetch_hls(
+            variant_url
+        )
+
+    except requests.RequestException as e:
+
+        print(
+            f"HLS: segment parent request "
+            f"failed channel={channel}: "
+            f"{e!r}"
+        )
+
+        return None
+
+    if r.status_code != 200:
+
+        print(
+            f"HLS: refreshed variant HTTP "
+            f"{r.status_code} "
+            f"channel={channel}"
+        )
+
+        return None
+
+    body = r.content
+
+    if not _is_manifest(body):
+
+        print(
+            f"HLS: refreshed parent is not "
+            f"a manifest channel={channel}"
+        )
+
+        return None
+
+    text_body = body.decode(
+        "utf-8",
+        errors="replace",
+    )
+
+    lines = text_body.splitlines()
+
+    fresh_segments = []
+
+    for line in lines:
+
+        stripped = line.strip()
+
+        if (
+            not stripped
+            or stripped.startswith("#")
+        ):
+
+            continue
+
+        fresh_segments.append(
+            urljoin(
+                r.url,
+                stripped,
+            )
+        )
+
+    if not fresh_segments:
+
+        print(
+            f"HLS: refreshed variant has no "
+            f"segments channel={channel}"
+        )
+
+        return None
+
+    old_url = item.get(
+        "url",
+        "",
+    )
+
+    old_parsed = urlparse(
+        old_url
+    )
+
+    old_path = old_parsed.path
+
+    # --------------------------------------------------------
+    # First try exact path match.
+    # --------------------------------------------------------
+
+    for fresh_url in fresh_segments:
+
+        if (
+            urlparse(
+                fresh_url
+            ).path
+            == old_path
+        ):
+
+            _update_hls_url(
+                channel,
+                segment_token,
+                fresh_url,
+            )
+
+            print(
+                f"HLS: refreshed segment "
+                f"channel={channel} "
+                f"matched existing segment"
+            )
+
+            return fresh_url
+
+    # --------------------------------------------------------
+    # Original segment is no longer in the live window.
+    #
+    # Use the newest advertised segment.
+    # --------------------------------------------------------
+
+    fresh_url = fresh_segments[-1]
+
+    _update_hls_url(
+        channel,
+        segment_token,
+        fresh_url,
+    )
+
+    print(
+        f"HLS: remapped expired segment "
+        f"channel={channel} "
+        f"to newest segment"
+    )
+
+    return fresh_url
 
 
 # ============================================================
@@ -1621,7 +1816,6 @@ def _get_cached_segment(
         )
 
         if not item:
-
             return None
 
         if (
@@ -1655,8 +1849,8 @@ def _rewrite_hls_manifest(
     channel: int,
     manifest_url: str,
     body: str,
+    parent_variant_token: str | None = None,
 ) -> str:
-
     """
     Rewrite all URLs inside an HLS manifest.
 
@@ -1664,11 +1858,13 @@ def _rewrite_hls_manifest(
 
         kind="variant"
 
-    and remember their variant index.
-
     Media segments are stored as:
 
         kind="segment"
+
+    Segment tokens remember which variant token created them.
+    This allows an expired segment to refresh through the
+    parent variant playlist.
     """
 
     out = []
@@ -1761,13 +1957,20 @@ def _rewrite_hls_manifest(
 
         else:
 
+            # ------------------------------------------------
             # Normal media segment.
+            #
+            # Remember the parent variant token.
+            # ------------------------------------------------
 
             out.append(
                 _hls_url(
                     channel,
                     absolute,
                     kind="segment",
+                    parent_variant_token=(
+                        parent_variant_token
+                    ),
                 )
             )
 
@@ -1826,17 +2029,6 @@ def playlist():
 
 @app.get("/stream/<int:n>.m3u8")
 def stream(n: int):
-
-    """
-    Stable Jellyfin entry point.
-
-    Jellyfin uses:
-
-        /stream/<channel>.m3u8
-
-    A fresh FilmOn master playlist is obtained for every
-    playback start.
-    """
 
     url = _get_stream_url(
         n
@@ -1902,6 +2094,7 @@ def stream(n: int):
         n,
         final,
         body,
+        parent_variant_token=None,
     )
 
     return Response(
@@ -2000,9 +2193,7 @@ def hls_proxy(
 
     else:
 
-        # Media segment:
-        # use the exact URL advertised by FilmOn.
-
+        # Media segment.
         upstream_url = item["url"]
 
     # --------------------------------------------------------
@@ -2044,7 +2235,8 @@ def hls_proxy(
             )
 
         # ----------------------------------------------------
-        # Refresh playlist/variant URL correctly.
+        # Playlist / variant:
+        # refresh their own URL.
         # ----------------------------------------------------
 
         if kind in (
@@ -2061,7 +2253,27 @@ def hls_proxy(
             )
 
             if not upstream_url:
+                break
 
+        # ----------------------------------------------------
+        # Segment:
+        #
+        # The original signed segment URL returned 403.
+        #
+        # Refresh the parent variant playlist and obtain a
+        # fresh segment URL.
+        # ----------------------------------------------------
+
+        elif kind == "segment":
+
+            upstream_url = (
+                _refresh_segment_from_parent(
+                    n,
+                    token,
+                )
+            )
+
+            if not upstream_url:
                 break
 
         time.sleep(
@@ -2088,6 +2300,20 @@ def hls_proxy(
         abort(502)
 
     body = r.content
+
+    # --------------------------------------------------------
+    # Protect against empty upstream responses.
+    # --------------------------------------------------------
+
+    if not body:
+
+        print(
+            f"HLS upstream returned empty body "
+            f"channel={n} "
+            f"kind={kind}"
+        )
+
+        abort(502)
 
     content_type = (
         r.headers.get(
@@ -2122,6 +2348,11 @@ def hls_proxy(
             n,
             r.url,
             text_body,
+            parent_variant_token=(
+                token
+                if kind == "variant"
+                else None
+            ),
         )
 
         return Response(
