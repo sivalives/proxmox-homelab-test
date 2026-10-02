@@ -38,10 +38,19 @@ import requests
 from flask import Flask, Response, abort, redirect
 
 
-# ---------------- settings (env-overridable) ----------------
+# ============================================================
+# SETTINGS
+# ============================================================
 
 def env_bool(name: str, default: bool) -> bool:
-    return os.getenv(name, str(default)).lower() in ("1", "true", "yes")
+    return os.getenv(
+        name,
+        str(default),
+    ).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 PUBLIC_BASE_URL = os.getenv(
@@ -49,97 +58,142 @@ PUBLIC_BASE_URL = os.getenv(
     "http://localhost:8765",
 ).rstrip("/")
 
+
 M3U_OUT_PATH = Path(
-    os.getenv("M3U_OUT_PATH", "/iptv/filmon.m3u")
+    os.getenv(
+        "M3U_OUT_PATH",
+        "/iptv/filmon.m3u",
+    )
 )
+
 
 CACHE_FILE = Path(
-    os.getenv("CACHE_FILE", "/data/filmon_channels.json")
+    os.getenv(
+        "CACHE_FILE",
+        "/data/filmon_channels.json",
+    )
 )
+
 
 REFRESH_HOURS = float(
-    os.getenv("REFRESH_HOURS", "24")
+    os.getenv(
+        "REFRESH_HOURS",
+        "24",
+    )
 )
+
 
 MIN_CHANNEL_ID = int(
-    os.getenv("MIN_CHANNEL_ID", "1")
+    os.getenv(
+        "MIN_CHANNEL_ID",
+        "1",
+    )
 )
+
 
 MAX_CHANNEL_ID = int(
-    os.getenv("MAX_CHANNEL_ID", "2000")
+    os.getenv(
+        "MAX_CHANNEL_ID",
+        "2000",
+    )
 )
 
+
 WORKERS = int(
-    os.getenv("WORKERS", "8")
+    os.getenv(
+        "WORKERS",
+        "8",
+    )
 )
+
 
 LOGO_SIZE = os.getenv(
     "LOGO_SIZE",
     "extra_big",
 )
 
+
 SKIP_ADULT = env_bool(
     "SKIP_ADULT",
     True,
 )
+
 
 SKIP_VR_EXP = env_bool(
     "SKIP_VR_EXP",
     True,
 )
 
+
 SKIP_VOD_VOX = env_bool(
     "SKIP_VOD_VOX",
     True,
 )
+
 
 HD_ONLY = env_bool(
     "HD_ONLY",
     True,
 )
 
+
 FREE_ONLY = env_bool(
     "FREE_ONLY",
     False,
 )
+
 
 PREFERRED_QUALITY = os.getenv(
     "PREFERRED_QUALITY",
     "high",
 )
 
+
 REWRITE_PLAYLIST = env_bool(
     "REWRITE_PLAYLIST",
     True,
 )
+
 
 FILMON_COOKIE = os.getenv(
     "FILMON_COOKIE",
     "",
 )
 
+
 API_URL = os.getenv(
     "FILMON_API",
     "https://www.filmon.com/ajax/getChannelInfo",
 )
+
 
 EPG_ENABLED = env_bool(
     "EPG_ENABLED",
     True,
 )
 
+
 EPG_OUT_PATH = Path(
-    os.getenv("EPG_OUT_PATH", "/iptv/filmon.xml")
+    os.getenv(
+        "EPG_OUT_PATH",
+        "/iptv/filmon.xml",
+    )
 )
 
+
 EPG_REFRESH_HOURS = float(
-    os.getenv("EPG_REFRESH_HOURS", "6")
+    os.getenv(
+        "EPG_REFRESH_HOURS",
+        "6",
+    )
 )
+
 
 EPG_API = os.getenv(
     "FILMON_EPG_API",
     "https://www.filmon.com/api-v2/tvguide/{}",
 )
+
 
 USER_AGENT = os.getenv(
     "USER_AGENT",
@@ -149,43 +203,61 @@ USER_AGENT = os.getenv(
 )
 
 
-# ---------------- HLS settings ----------------
-#
-# Jellyfin receives a stable local token.
-#
-# FilmOn URLs behind that token are refreshed periodically.
-#
+# ============================================================
+# HLS SETTINGS
+# ============================================================
 
 HLS_TOKEN_TTL = int(
-    os.getenv("HLS_TOKEN_TTL", "86400")
+    os.getenv(
+        "HLS_TOKEN_TTL",
+        "86400",
+    )
 )
+
 
 HLS_UPSTREAM_REFRESH = int(
-    os.getenv("HLS_UPSTREAM_REFRESH", "30")
+    os.getenv(
+        "HLS_UPSTREAM_REFRESH",
+        "30",
+    )
 )
+
 
 HLS_TIMEOUT = int(
-    os.getenv("HLS_TIMEOUT", "15")
+    os.getenv(
+        "HLS_TIMEOUT",
+        "15",
+    )
 )
+
 
 HLS_RETRY_COUNT = int(
-    os.getenv("HLS_RETRY_COUNT", "2")
+    os.getenv(
+        "HLS_RETRY_COUNT",
+        "2",
+    )
 )
 
-# Keep recently successful media responses in memory.
-#
-# This is especially useful because Jellyfin can request an HLS segment
-# slightly after FilmOn's signed URL has expired.
+
 HLS_SEGMENT_CACHE_TTL = int(
-    os.getenv("HLS_SEGMENT_CACHE_TTL", "120")
+    os.getenv(
+        "HLS_SEGMENT_CACHE_TTL",
+        "120",
+    )
 )
+
 
 HLS_SEGMENT_CACHE_MAX = int(
-    os.getenv("HLS_SEGMENT_CACHE_MAX", "512")
+    os.getenv(
+        "HLS_SEGMENT_CACHE_MAX",
+        "512",
+    )
 )
 
 
-# ------------------------------------------------------------
+# ============================================================
+# HTTP
+# ============================================================
 
 HEADERS = {
     "User-Agent": USER_AGENT,
@@ -194,6 +266,7 @@ HEADERS = {
     "Referer": "https://www.filmon.com/",
     "X-Requested-With": "XMLHttpRequest",
 }
+
 
 if FILMON_COOKIE:
     HEADERS["Cookie"] = FILMON_COOKIE
@@ -209,33 +282,33 @@ stats: Counter = Counter()
 
 
 # ============================================================
-# FilmOn session handling
+# FILMON SESSION
 # ============================================================
 
 _local = threading.local()
+
 
 WARMUP_URL = os.getenv(
     "FILMON_WARMUP_URL",
     "https://www.filmon.com/tv/bbc-news",
 )
 
+
 _logged_cookies = False
 
 
 def new_session() -> requests.Session:
-    """
-    Create a fresh FilmOn HTTP session.
-
-    When FILMON_COOKIE is not supplied, visit the FilmOn page first so
-    FilmOn can establish its normal guest cookies.
-    """
 
     global _logged_cookies
 
     s = requests.Session()
-    s.headers.update(HEADERS)
+
+    s.headers.update(
+        HEADERS
+    )
 
     if not FILMON_COOKIE:
+
         s.cookies.set(
             "ftv_site_mode",
             "classic",
@@ -244,16 +317,20 @@ def new_session() -> requests.Session:
         )
 
         try:
+
             s.get(
                 WARMUP_URL,
                 timeout=15,
             )
+
         except Exception as e:
+
             print(
                 f"Warm-up request failed: {e!r}"
             )
 
         if not _logged_cookies:
+
             _logged_cookies = True
 
             print(
@@ -265,33 +342,35 @@ def new_session() -> requests.Session:
 
 
 def get_session() -> requests.Session:
-    """
-    Each Gunicorn worker/thread gets its own requests.Session.
-    """
 
-    if not hasattr(_local, "s"):
+    if not hasattr(
+        _local,
+        "s",
+    ):
+
         _local.s = new_session()
 
     return _local.s
 
 
 # ============================================================
-# FilmOn API
+# FILMON API
 # ============================================================
 
 def get_channel_data(
     n: int,
     quality: str = "high",
 ):
-    """
-    Return FilmOn channel data or None.
-    """
 
     j = None
 
-    for attempt in (1, 2):
+    for attempt in (
+        1,
+        2,
+    ):
 
         try:
+
             s = get_session()
 
             r = s.post(
@@ -303,7 +382,11 @@ def get_channel_data(
                 timeout=15,
             )
 
-            if r.status_code in (404, 405):
+            if r.status_code in (
+                404,
+                405,
+            ):
+
                 r = s.get(
                     API_URL,
                     params={
@@ -317,48 +400,65 @@ def get_channel_data(
 
         except Exception as e:
 
-            if stats["request_failed"] < 3:
+            if stats[
+                "request_failed"
+            ] < 3:
+
                 print(
                     f"Request for channel {n} failed: {e!r}"
                 )
 
-            stats["request_failed"] += 1
+            stats[
+                "request_failed"
+            ] += 1
 
             return None
 
         if (
             isinstance(j, dict)
-            and j.get("streamName") == "maintenance"
+            and j.get(
+                "streamName"
+            ) == "maintenance"
             and attempt == 1
             and not FILMON_COOKIE
         ):
+
             _local.s = new_session()
+
             continue
 
         break
 
     if (
         isinstance(j, dict)
-        and isinstance(j.get("data"), dict)
+        and isinstance(
+            j.get("data"),
+            dict,
+        )
     ):
+
         j = j["data"]
 
-    return j if isinstance(j, dict) else None
+    return (
+        j
+        if isinstance(j, dict)
+        else None
+    )
 
 
-def _get_stream_url(channel: int) -> str | None:
-    """
-    Ask FilmOn for a fresh stream URL.
-
-    This function is deliberately called repeatedly during HLS playback.
-    """
+def _get_stream_url(
+    channel: int,
+) -> str | None:
 
     d = get_channel_data(
         channel,
         PREFERRED_QUALITY,
     )
 
-    if not d or not d.get("streams"):
+    if not d:
+        return None
+
+    if not d.get("streams"):
         return None
 
     streams = d["streams"]
@@ -367,7 +467,9 @@ def _get_stream_url(channel: int) -> str | None:
         (
             s
             for s in streams
-            if s.get("quality") == PREFERRED_QUALITY
+            if s.get(
+                "quality"
+            ) == PREFERRED_QUALITY
         ),
         streams[0],
     )
@@ -376,7 +478,7 @@ def _get_stream_url(channel: int) -> str | None:
 
 
 # ============================================================
-# Channel scanning
+# CHANNEL SCANNING
 # ============================================================
 
 def probe(n: int):
@@ -389,12 +491,25 @@ def probe(n: int):
     if d is None:
         return None
 
-    if not d.get("title") or not d.get("streams"):
+    if (
+        not d.get("title")
+        or not d.get("streams")
+    ):
 
-        if d.get("streamName") == "maintenance":
-            stats["maintenance_placeholder"] += 1
+        if (
+            d.get("streamName")
+            == "maintenance"
+        ):
+
+            stats[
+                "maintenance_placeholder"
+            ] += 1
+
         else:
-            stats["no_channel_or_no_streams"] += 1
+
+            stats[
+                "no_channel_or_no_streams"
+            ] += 1
 
         if sum(
             stats[k]
@@ -403,19 +518,25 @@ def probe(n: int):
                 "no_channel_or_no_streams",
             )
         ) <= 2:
+
             print(
-                f"Channel {n}: no title/streams in response: "
+                f"Channel {n}: "
+                f"no title/streams in response: "
                 f"{str(d)[:200]}"
             )
 
         return None
 
     if (
-        (SKIP_VR_EXP and d.get("is360"))
-        or
-        (SKIP_ADULT and d.get("is_adult"))
-        or
         (
+            SKIP_VR_EXP
+            and d.get("is360")
+        )
+        or (
+            SKIP_ADULT
+            and d.get("is_adult")
+        )
+        or (
             SKIP_VOD_VOX
             and (
                 d.get("is_vod")
@@ -423,24 +544,47 @@ def probe(n: int):
             )
         )
     ):
-        stats["skipped_type"] += 1
+
+        stats[
+            "skipped_type"
+        ] += 1
+
         return None
 
-    if FREE_ONLY and not d.get("is_free"):
-        stats["not_free"] += 1
-        return None
-
-    if HD_ONLY and not any(
-        s.get("quality") == "high"
-        for s in d["streams"]
+    if (
+        FREE_ONLY
+        and not d.get("is_free")
     ):
-        stats["no_hd_stream"] += 1
+
+        stats[
+            "not_free"
+        ] += 1
+
         return None
 
-    stats["kept"] += 1
+    if (
+        HD_ONLY
+        and not any(
+            s.get("quality") == "high"
+            for s in d["streams"]
+        )
+    ):
+
+        stats[
+            "no_hd_stream"
+        ] += 1
+
+        return None
+
+    stats[
+        "kept"
+    ] += 1
 
     if not d.get("is_free"):
-        stats["kept_but_not_flagged_free"] += 1
+
+        stats[
+            "kept_but_not_flagged_free"
+        ] += 1
 
     return {
         "id": n,
@@ -473,10 +617,14 @@ def build_m3u() -> str:
         )
 
         lines.append(
-            f"{PUBLIC_BASE_URL}/stream/{c['id']}.m3u8"
+            f"{PUBLIC_BASE_URL}/stream/"
+            f"{c['id']}.m3u8"
         )
 
-    return "\n".join(lines) + "\n"
+    return (
+        "\n".join(lines)
+        + "\n"
+    )
 
 
 def write_m3u() -> None:
@@ -607,7 +755,10 @@ def background() -> None:
                 - CACHE_FILE.stat().st_mtime
             )
 
-            if age < REFRESH_HOURS * 3600:
+            if (
+                age
+                < REFRESH_HOURS * 3600
+            ):
 
                 time.sleep(
                     REFRESH_HOURS * 3600
@@ -615,6 +766,7 @@ def background() -> None:
                 )
 
         except Exception:
+
             pass
 
     while True:
@@ -627,7 +779,7 @@ def background() -> None:
 
 
 # ============================================================
-# TV Guide / XMLTV
+# XMLTV EPG
 # ============================================================
 
 epg_xml: str = ""
@@ -637,7 +789,10 @@ epg_stats: Counter = Counter()
 
 def parse_guide(j) -> list:
 
-    if isinstance(j, dict):
+    if isinstance(
+        j,
+        dict,
+    ):
 
         for key in (
             "data",
@@ -650,6 +805,7 @@ def parse_guide(j) -> list:
                 j.get(key),
                 list,
             ):
+
                 return j[key]
 
         return (
@@ -676,7 +832,9 @@ def fetch_guide(n: int) -> list:
 
     except Exception:
 
-        epg_stats["failed"] += 1
+        epg_stats[
+            "failed"
+        ] += 1
 
         return []
 
@@ -692,7 +850,10 @@ def fetch_guide(n: int) -> list:
     ]
 
     if not items:
-        epg_stats["empty"] += 1
+
+        epg_stats[
+            "empty"
+        ] += 1
 
     return items
 
@@ -749,6 +910,7 @@ def build_epg_xml(
                 )
 
             except Exception:
+
                 continue
 
             parts = [
@@ -761,6 +923,7 @@ def build_epg_xml(
             if p.get(
                 "programme_description"
             ):
+
                 parts.append(
                     f'<desc>{escape(str(p["programme_description"]))}</desc>'
                 )
@@ -778,6 +941,7 @@ def build_epg_xml(
             ]
 
             if imgs:
+
                 parts.append(
                     f'<icon src={quoteattr(imgs[0])}/>'
                 )
@@ -794,14 +958,19 @@ def build_epg_xml(
         "</tv>"
     )
 
-    return "\n".join(out) + "\n"
+    return (
+        "\n".join(out)
+        + "\n"
+    )
 
 
 def refresh_epg() -> None:
 
     global epg_xml
 
-    snapshot = list(channels)
+    snapshot = list(
+        channels
+    )
 
     if not snapshot:
         return
@@ -892,11 +1061,13 @@ def refresh_epg() -> None:
 def epg_loop() -> None:
 
     while not channels:
+
         time.sleep(10)
 
     while True:
 
         try:
+
             refresh_epg()
 
         except Exception as e:
@@ -911,10 +1082,11 @@ def epg_loop() -> None:
 
 
 # ============================================================
-# HLS proxy state
+# HLS PROXY STATE
 # ============================================================
 
 _hls_lock = threading.Lock()
+
 
 #
 # token -> {
@@ -922,21 +1094,18 @@ _hls_lock = threading.Lock()
 #     "url": str,
 #     "created": float,
 #     "last_refresh": float,
-#     "kind": "playlist" | "segment",
+#     "kind": "playlist" | "variant" | "segment",
+#     "variant_index": int | None,
 # }
 #
+
 _hls_urls = {}
 
 
 #
 # Recently downloaded media segments.
 #
-# cache_key -> {
-#     "body": bytes,
-#     "content_type": str,
-#     "created": float,
-# }
-#
+
 _hls_segment_cache = {}
 
 
@@ -955,10 +1124,13 @@ def _cleanup_hls_state() -> None:
             _hls_urls.items()
         ):
 
-            if value.get(
-                "created",
-                0,
-            ) < cutoff:
+            if (
+                value.get(
+                    "created",
+                    0,
+                )
+                < cutoff
+            ):
 
                 _hls_urls.pop(
                     key,
@@ -974,28 +1146,31 @@ def _cleanup_hls_state() -> None:
             _hls_segment_cache.items()
         ):
 
-            if value.get(
-                "created",
-                0,
-            ) < segment_cutoff:
+            if (
+                value.get(
+                    "created",
+                    0,
+                )
+                < segment_cutoff
+            ):
 
                 _hls_segment_cache.pop(
                     key,
                     None,
                 )
 
-        #
-        # Hard limit so a long-running server
-        # cannot grow indefinitely.
-        #
-        if len(_hls_segment_cache) > HLS_SEGMENT_CACHE_MAX:
+        if (
+            len(_hls_segment_cache)
+            > HLS_SEGMENT_CACHE_MAX
+        ):
 
             ordered = sorted(
                 _hls_segment_cache.items(),
-                key=lambda x: x[1].get(
-                    "created",
-                    0,
-                ),
+                key=lambda x:
+                    x[1].get(
+                        "created",
+                        0,
+                    ),
             )
 
             remove_count = (
@@ -1017,6 +1192,7 @@ def _hls_token(
     channel: int,
     url: str,
     kind: str = "unknown",
+    variant_index: int | None = None,
 ) -> str:
 
     token = uuid.uuid4().hex
@@ -1031,6 +1207,7 @@ def _hls_token(
             "created": now,
             "last_refresh": now,
             "kind": kind,
+            "variant_index": variant_index,
         }
 
     _cleanup_hls_state()
@@ -1041,22 +1218,38 @@ def _hls_token(
 def _hls_url(
     channel: int,
     url: str,
+    kind: str | None = None,
+    variant_index: int | None = None,
 ) -> str:
 
-    path = urlparse(url).path.lower()
+    if kind is None:
 
-    if (
-        path.endswith(".m3u8")
-        or path.endswith(".m3u")
-    ):
-        kind = "playlist"
-    else:
-        kind = "segment"
+        path = urlparse(
+            url
+        ).path.lower()
+
+        if (
+            path.endswith(".m3u8")
+            or path.endswith(".m3u")
+        ):
+
+            kind = "playlist"
+
+        else:
+
+            kind = "segment"
+
+    token = _hls_token(
+        channel,
+        url,
+        kind,
+        variant_index,
+    )
 
     return (
         f"{PUBLIC_BASE_URL}"
         f"/hls/{channel}/"
-        f"{_hls_token(channel, url, kind)}"
+        f"{token}"
     )
 
 
@@ -1072,14 +1265,21 @@ def _get_hls_item(
         )
 
         if not item:
+
             return None
 
-        if item.get(
-            "channel"
-        ) != channel:
+        if (
+            item.get(
+                "channel"
+            )
+            != channel
+        ):
+
             return None
 
-        return dict(item)
+        return dict(
+            item
+        )
 
 
 def _update_hls_url(
@@ -1095,18 +1295,86 @@ def _update_hls_url(
         )
 
         if not item:
+
             return False
 
-        if item.get(
-            "channel"
-        ) != channel:
+        if (
+            item.get(
+                "channel"
+            )
+            != channel
+        ):
+
             return False
 
         item["url"] = url
-        item["last_refresh"] = time.time()
+
+        item[
+            "last_refresh"
+        ] = time.time()
 
         return True
 
+
+# ============================================================
+# HLS VARIANT DISCOVERY
+# ============================================================
+
+def _get_variant_urls(
+    manifest_url: str,
+    body: str,
+) -> list[str]:
+
+    """
+    Extract variant playlist URLs from an HLS master playlist.
+
+    Every #EXT-X-STREAM-INF line is followed by its
+    corresponding variant URI.
+    """
+
+    variants = []
+
+    lines = body.splitlines()
+
+    waiting_for_variant = False
+
+    for line in lines:
+
+        stripped = line.strip()
+
+        if not stripped:
+
+            continue
+
+        if stripped.startswith(
+            "#EXT-X-STREAM-INF:"
+        ):
+
+            waiting_for_variant = True
+
+            continue
+
+        if waiting_for_variant:
+
+            if stripped.startswith("#"):
+
+                continue
+
+            variants.append(
+                urljoin(
+                    manifest_url,
+                    stripped,
+                )
+            )
+
+            waiting_for_variant = False
+
+    return variants
+
+
+# ============================================================
+# HLS SESSION REFRESH
+# ============================================================
 
 def _refresh_hls_session(
     channel: int,
@@ -1120,6 +1388,7 @@ def _refresh_hls_session(
     )
 
     if not item:
+
         return None
 
     now = time.time()
@@ -1138,37 +1407,160 @@ def _refresh_hls_session(
 
         return item["url"]
 
-    #
-    # Only refresh the FilmOn master/entry
-    # stream URL here.
-    #
-    fresh_url = _get_stream_url(
-        channel
+    kind = item.get(
+        "kind",
+        "unknown",
     )
 
-    if not fresh_url:
-        return None
+    # --------------------------------------------------------
+    # VARIANT PLAYLIST
+    #
+    # IMPORTANT:
+    #
+    # Never replace a variant playlist URL with the master
+    # playlist URL.
+    #
+    # Get a fresh master and select the same variant index.
+    # --------------------------------------------------------
 
-    if not _update_hls_url(
-        channel,
-        token,
-        fresh_url,
-    ):
-        return None
+    if kind == "variant":
 
-    return fresh_url
+        fresh_master_url = _get_stream_url(
+            channel
+        )
+
+        if not fresh_master_url:
+
+            print(
+                f"HLS: unable to get fresh "
+                f"master URL "
+                f"channel={channel}"
+            )
+
+            return None
+
+        try:
+
+            r = _fetch_hls(
+                fresh_master_url
+            )
+
+        except requests.RequestException as e:
+
+            print(
+                f"HLS: variant master refresh "
+                f"failed channel={channel}: "
+                f"{e!r}"
+            )
+
+            return None
+
+        if r.status_code != 200:
+
+            print(
+                f"HLS: variant master refresh "
+                f"HTTP {r.status_code} "
+                f"channel={channel}"
+            )
+
+            return None
+
+        master_body = r.text
+
+        if "#EXTM3U" not in master_body:
+
+            print(
+                f"HLS: fresh master is not "
+                f"a manifest channel={channel}"
+            )
+
+            return None
+
+        variants = _get_variant_urls(
+            r.url,
+            master_body,
+        )
+
+        index = item.get(
+            "variant_index"
+        )
+
+        if (
+            index is None
+            or index < 0
+            or index >= len(variants)
+        ):
+
+            print(
+                f"HLS: invalid variant index "
+                f"channel={channel} "
+                f"index={index} "
+                f"available={len(variants)}"
+            )
+
+            return None
+
+        fresh_variant_url = variants[
+            index
+        ]
+
+        if not _update_hls_url(
+            channel,
+            token,
+            fresh_variant_url,
+        ):
+
+            return None
+
+        print(
+            f"HLS: refreshed variant "
+            f"channel={channel} "
+            f"variant={index}"
+        )
+
+        return fresh_variant_url
+
+    # --------------------------------------------------------
+    # ROOT / MASTER PLAYLIST
+    #
+    # This is the only playlist type that should directly
+    # use _get_stream_url().
+    # --------------------------------------------------------
+
+    if kind == "playlist":
+
+        fresh_url = _get_stream_url(
+            channel
+        )
+
+        if not fresh_url:
+
+            return None
+
+        if not _update_hls_url(
+            channel,
+            token,
+            fresh_url,
+        ):
+
+            return None
+
+        return fresh_url
+
+    # --------------------------------------------------------
+    # Everything else
+    # --------------------------------------------------------
+
+    return item["url"]
 
 
 # ============================================================
-# HLS HTTP helpers
+# HLS HTTP HELPERS
 # ============================================================
 
 def _fetch_hls(
     url: str,
 ):
-    """
-    Fetch an HLS resource using the current FilmOn session.
-    """
 
     return get_session().get(
         url,
@@ -1191,7 +1583,10 @@ def _is_manifest(
             errors="ignore",
         )
 
-        return "#EXTM3U" in probe
+        return (
+            "#EXTM3U"
+            in probe
+        )
 
     except Exception:
 
@@ -1226,6 +1621,7 @@ def _get_cached_segment(
         )
 
         if not item:
+
             return None
 
         if (
@@ -1252,7 +1648,7 @@ def _get_cached_segment(
 
 
 # ============================================================
-# HLS manifest rewriting
+# HLS MANIFEST REWRITING
 # ============================================================
 
 def _rewrite_hls_manifest(
@@ -1264,16 +1660,26 @@ def _rewrite_hls_manifest(
     """
     Rewrite all URLs inside an HLS manifest.
 
-    Jellyfin only sees:
+    Master playlist variants are stored as:
 
-        /hls/<channel>/<local-token>
+        kind="variant"
 
-    FilmOn signed URLs never reach Jellyfin.
+    and remember their variant index.
+
+    Media segments are stored as:
+
+        kind="segment"
     """
 
     out = []
 
-    for line in body.splitlines():
+    lines = body.splitlines()
+
+    variant_index = 0
+
+    waiting_for_variant = False
+
+    for line in lines:
 
         stripped = line.strip()
 
@@ -1283,9 +1689,10 @@ def _rewrite_hls_manifest(
 
             continue
 
-        #
-        # HLS tags containing URI="..."
-        #
+        # ----------------------------------------------------
+        # HLS tags
+        # ----------------------------------------------------
+
         if stripped.startswith("#"):
 
             if "URI=" in line:
@@ -1303,7 +1710,10 @@ def _rewrite_hls_manifest(
 
                     return (
                         f"URI={quote}"
-                        f"{_hls_url(channel, absolute)}"
+                        f"{_hls_url(
+                            channel,
+                            absolute,
+                        )}"
                         f"{quote}"
                     )
 
@@ -1315,22 +1725,51 @@ def _rewrite_hls_manifest(
 
             out.append(line)
 
+            if stripped.startswith(
+                "#EXT-X-STREAM-INF:"
+            ):
+
+                waiting_for_variant = True
+
             continue
 
+        # ----------------------------------------------------
+        # URI after EXT-X-STREAM-INF
         #
-        # Normal HLS URI line.
-        #
+        # This is a variant media playlist.
+        # ----------------------------------------------------
+
         absolute = urljoin(
             manifest_url,
             stripped,
         )
 
-        out.append(
-            _hls_url(
-                channel,
-                absolute,
+        if waiting_for_variant:
+
+            out.append(
+                _hls_url(
+                    channel,
+                    absolute,
+                    kind="variant",
+                    variant_index=variant_index,
+                )
             )
-        )
+
+            variant_index += 1
+
+            waiting_for_variant = False
+
+        else:
+
+            # Normal media segment.
+
+            out.append(
+                _hls_url(
+                    channel,
+                    absolute,
+                    kind="segment",
+                )
+            )
 
     return (
         "\n".join(out)
@@ -1339,7 +1778,7 @@ def _rewrite_hls_manifest(
 
 
 # ============================================================
-# Public endpoints
+# PUBLIC ENDPOINTS
 # ============================================================
 
 @app.get("/")
@@ -1382,7 +1821,7 @@ def playlist():
 
 
 # ============================================================
-# Main stable HLS entry point
+# MAIN STABLE HLS ENTRY POINT
 # ============================================================
 
 @app.get("/stream/<int:n>.m3u8")
@@ -1391,48 +1830,50 @@ def stream(n: int):
     """
     Stable Jellyfin entry point.
 
-    Jellyfin should always use:
+    Jellyfin uses:
 
         /stream/<channel>.m3u8
 
-    This endpoint obtains a fresh FilmOn stream URL every time
-    Jellyfin starts playback.
+    A fresh FilmOn master playlist is obtained for every
+    playback start.
     """
 
-    url = _get_stream_url(n)
+    url = _get_stream_url(
+        n
+    )
 
     if not url:
+
         abort(404)
 
-    #
-    # Optional direct redirect mode.
-    #
     if not REWRITE_PLAYLIST:
+
         return redirect(
             url,
             code=302,
         )
 
-    #
-    # Fetch FilmOn entry playlist.
-    #
-    r = _fetch_hls(url)
+    r = _fetch_hls(
+        url
+    )
 
-    #
-    # Retry with a completely fresh FilmOn URL.
-    #
     if r.status_code in (
         401,
         403,
         404,
     ):
 
-        url = _get_stream_url(n)
+        url = _get_stream_url(
+            n
+        )
 
         if not url:
+
             abort(404)
 
-        r = _fetch_hls(url)
+        r = _fetch_hls(
+            url
+        )
 
     if r.status_code != 200:
 
@@ -1465,7 +1906,9 @@ def stream(n: int):
 
     return Response(
         out,
-        mimetype="application/vnd.apple.mpegurl",
+        mimetype=(
+            "application/vnd.apple.mpegurl"
+        ),
         headers={
             "Cache-Control":
                 "no-store, "
@@ -1478,7 +1921,7 @@ def stream(n: int):
 
 
 # ============================================================
-# HLS proxy
+# HLS PROXY
 # ============================================================
 
 @app.get("/hls/<int:n>/<token>")
@@ -1487,29 +1930,13 @@ def hls_proxy(
     token: str,
 ):
 
-    """
-    Proxy one HLS resource.
-
-    Playlist:
-        - refresh FilmOn URL periodically
-        - fetch current playlist
-        - rewrite nested URLs
-
-    Segment:
-        - serve cached segment if available
-        - otherwise fetch FilmOn signed URL
-        - cache successful response
-
-    The important part is that Jellyfin never receives the FilmOn
-    signed URL directly.
-    """
-
     item = _get_hls_item(
         n,
         token,
     )
 
     if not item:
+
         abort(404)
 
     kind = item.get(
@@ -1517,14 +1944,10 @@ def hls_proxy(
         "unknown",
     )
 
-    #
     # --------------------------------------------------------
-    # Segment cache
+    # SEGMENT CACHE
     # --------------------------------------------------------
-    #
-    # If Jellyfin asks for the same local segment token again,
-    # don't depend on FilmOn's signed URL still being valid.
-    #
+
     if kind == "segment":
 
         cached = _get_cached_segment(
@@ -1548,13 +1971,14 @@ def hls_proxy(
                 },
             )
 
-    #
     # --------------------------------------------------------
-    # Playlist URL refresh
+    # PLAYLIST / VARIANT REFRESH
     # --------------------------------------------------------
-    #
 
-    if kind == "playlist":
+    if kind in (
+        "playlist",
+        "variant",
+    ):
 
         upstream_url = (
             _refresh_hls_session(
@@ -1568,24 +1992,22 @@ def hls_proxy(
             print(
                 f"HLS: unable to refresh "
                 f"FilmOn playlist "
-                f"channel={n}"
+                f"channel={n} "
+                f"kind={kind}"
             )
 
             abort(502)
 
     else:
 
-        #
-        # For media segments, use the exact URL that was
-        # advertised by the current FilmOn playlist.
-        #
+        # Media segment:
+        # use the exact URL advertised by FilmOn.
+
         upstream_url = item["url"]
 
-    #
     # --------------------------------------------------------
-    # Fetch upstream
+    # FETCH UPSTREAM
     # --------------------------------------------------------
-    #
 
     r = None
 
@@ -1600,6 +2022,7 @@ def hls_proxy(
             )
 
             if r.status_code == 200:
+
                 break
 
             print(
@@ -1620,11 +2043,14 @@ def hls_proxy(
                 f"{e!r}"
             )
 
-        #
-        # If this is a playlist, get a completely new
-        # FilmOn stream URL.
-        #
-        if kind == "playlist":
+        # ----------------------------------------------------
+        # Refresh playlist/variant URL correctly.
+        # ----------------------------------------------------
+
+        if kind in (
+            "playlist",
+            "variant",
+        ):
 
             upstream_url = (
                 _refresh_hls_session(
@@ -1635,22 +2061,21 @@ def hls_proxy(
             )
 
             if not upstream_url:
+
                 break
 
-        #
-        # For a segment, don't blindly replace the segment
-        # URL with a new master URL. The segment token is tied
-        # to the exact segment advertised by FilmOn.
-        #
-        time.sleep(0.25)
+        time.sleep(
+            0.25
+        )
 
-    #
     # --------------------------------------------------------
-    # Upstream failed
+    # UPSTREAM FAILED
     # --------------------------------------------------------
-    #
 
-    if not r or r.status_code != 200:
+    if (
+        not r
+        or r.status_code != 200
+    ):
 
         print(
             f"HLS upstream failed "
@@ -1671,11 +2096,9 @@ def hls_proxy(
         or ""
     ).lower()
 
-    #
     # --------------------------------------------------------
-    # Nested playlist
+    # NESTED PLAYLIST
     # --------------------------------------------------------
-    #
 
     if _is_manifest(body):
 
@@ -1684,12 +2107,10 @@ def hls_proxy(
             errors="replace",
         )
 
-        #
-        # Update this local token to the current final
-        # upstream URL. This is important when FilmOn
-        # redirects to a different CDN URL.
-        #
-        if kind == "playlist":
+        if kind in (
+            "playlist",
+            "variant",
+        ):
 
             _update_hls_url(
                 n,
@@ -1718,11 +2139,9 @@ def hls_proxy(
             },
         )
 
-    #
     # --------------------------------------------------------
-    # Media segment
+    # MEDIA SEGMENT
     # --------------------------------------------------------
-    #
 
     if kind == "segment":
 
@@ -1750,7 +2169,7 @@ def hls_proxy(
 
 
 # ============================================================
-# Background workers
+# BACKGROUND WORKERS
 # ============================================================
 
 threading.Thread(
@@ -1768,7 +2187,7 @@ if EPG_ENABLED:
 
 
 # ============================================================
-# Main
+# MAIN
 # ============================================================
 
 if __name__ == "__main__":
