@@ -1,0 +1,28 @@
+services:
+  filmon_iptv:
+    build: .
+    container_name: filmon-iptv
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      # Address Jellyfin uses to reach THIS container. Use the LXC's IP (or a shared
+      # docker network + service name, e.g. http://filmon-iptv:8765).
+      PUBLIC_BASE_URL: "http://192.168.1.107:8765"   # <-- change to your LXC IP
+      M3U_OUT_PATH: /iptv/filmon.m3u
+      REFRESH_HOURS: "24"
+      # SKIP_ADULT: "true"
+      # PREFERRED_QUALITY: "high"
+    volumes:
+      - /opt/jellyfin-data/iptv:/iptv
+      - /opt/jellyfin-data/filmon-iptv-data:/data
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: filmon-iptv
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: filmon-iptv

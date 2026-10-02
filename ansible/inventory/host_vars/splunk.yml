@@ -3,12 +3,12 @@ hawser_openbao_path: "secret/splunk"
 docker_data_mount: /opt/splunk-data
 
 app_storage:
-  - path: "{{ docker_data_mount }}/splunk-data"
+  - path: /opt/splunk-var
     owner: "41812"
     group: "41812"
     mode: "0755"
 
-  - path: "{{ docker_data_mount }}/splunk-apps"
+  - path: /opt/splunk-etc
     owner: "41812"
     group: "41812"
     mode: "0755"
