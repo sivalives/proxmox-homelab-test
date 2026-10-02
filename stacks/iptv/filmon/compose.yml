@@ -10,14 +10,16 @@ services:
       # docker network + service name, e.g. http://filmon-iptv:8765).
       PUBLIC_BASE_URL: "http://192.168.1.107:8765"   # <-- change to your LXC IP
 
-      HLS_SEGMENT_CACHE_TTL: "900"
       HLS_SEGMENT_CACHE_MAX: "4096"
-      HLS_UPSTREAM_REFRESH: "15"
-      HLS_TIMEOUT: "20"
-      HLS_RETRY_COUNT: "3"
       HLS_PREFETCH_WORKERS: "8"
       HLS_BACKGROUND_INTERVAL: "2"
-      HLS_PREFETCH_ENABLED: "false"
+      HLS_PREFETCH_ENABLED: false          # never block the playlist
+      HLS_UPSTREAM_REFRESH: "10"
+      HLS_TIMEOUT: "12"
+      HLS_RETRY_COUNT: "2"
+      HLS_SEGMENT_CACHE_TTL: "300"
+      PREFERRED_QUALITY: "high"              # or low if you want less transcoding pressure
+
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
       - /opt/jellyfin-data/filmon-iptv-data:/data
