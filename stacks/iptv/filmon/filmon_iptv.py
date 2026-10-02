@@ -1,25 +1,21 @@
 """
-FilmOn -> Jellyfin helper (new site API).
+FilmOn -> Jellyfin helper.
 
-- Scans FilmOn channels via the site's own /ajax/getChannelInfo endpoint
-  (on start, then every REFRESH_HOURS)
-- Writes an M3U file into a shared folder (default /iptv/filmon.m3u)
-- Serves /stream/<id>.m3u8 with a stable local URL
-- Proxies nested HLS playlists and media segments
-- Continuously refreshes short-lived FilmOn stream URLs
-- Refreshes expired HLS media segments through their parent variant playlist
-- Tracks HLS MEDIA-SEQUENCE so expired segments are remapped correctly
-- Builds an XMLTV EPG guide
-
-This only fetches what FilmOn itself serves to your session. It does not remove
-any time limits or subscription checks.
+- Scans FilmOn channels
+- Writes M3U playlist
+- Serves stable /stream/<id>.m3u8 URLs
+- Proxies HLS playlists and media segments
+- Refreshes short-lived FilmOn URLs
+- Prefetches live HLS segments into a local cache
+- Tracks HLS MEDIA-SEQUENCE
+- Builds XMLTV EPG
 
 Endpoints:
   GET /                  status page
-  GET /playlist.m3u      same playlist over HTTP
-  GET /stream/<id>.m3u8  stable local HLS entry point
-  GET /refresh           force re-scan + rewrite M3U
-  GET /health            channel count + last scan stats
+  GET /playlist.m3u      playlist
+  GET /stream/<id>.m3u8  stable HLS entry point
+  GET /refresh           force channel scan
+  GET /health            status
   GET /guide.xml         XMLTV guide
 """
 
@@ -31,10 +27,10 @@ import time
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
-from xml.sax.saxutils import escape, quoteattr
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
+from xml.sax.saxutils import escape, quoteattr
 
 import requests
 from flask import Flask, Response, abort, redirect
@@ -48,18 +44,13 @@ def env_bool(name: str, default: bool) -> bool:
     return os.getenv(
         name,
         str(default),
-    ).lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+    ).lower() in ("1", "true", "yes")
 
 
 PUBLIC_BASE_URL = os.getenv(
     "PUBLIC_BASE_URL",
     "http://localhost:8765",
 ).rstrip("/")
-
 
 M3U_OUT_PATH = Path(
     os.getenv(
@@ -68,14 +59,12 @@ M3U_OUT_PATH = Path(
     )
 )
 
-
 CACHE_FILE = Path(
     os.getenv(
         "CACHE_FILE",
         "/data/filmon_channels.json",
     )
 )
-
 
 REFRESH_HOURS = float(
     os.getenv(
@@ -84,14 +73,12 @@ REFRESH_HOURS = float(
     )
 )
 
-
 MIN_CHANNEL_ID = int(
     os.getenv(
         "MIN_CHANNEL_ID",
         "1",
     )
 )
-
 
 MAX_CHANNEL_ID = int(
     os.getenv(
@@ -100,7 +87,6 @@ MAX_CHANNEL_ID = int(
     )
 )
 
-
 WORKERS = int(
     os.getenv(
         "WORKERS",
@@ -108,72 +94,60 @@ WORKERS = int(
     )
 )
 
-
 LOGO_SIZE = os.getenv(
     "LOGO_SIZE",
     "extra_big",
 )
-
 
 SKIP_ADULT = env_bool(
     "SKIP_ADULT",
     True,
 )
 
-
 SKIP_VR_EXP = env_bool(
     "SKIP_VR_EXP",
     True,
 )
-
 
 SKIP_VOD_VOX = env_bool(
     "SKIP_VOD_VOX",
     True,
 )
 
-
 HD_ONLY = env_bool(
     "HD_ONLY",
     True,
 )
-
 
 FREE_ONLY = env_bool(
     "FREE_ONLY",
     False,
 )
 
-
 PREFERRED_QUALITY = os.getenv(
     "PREFERRED_QUALITY",
     "high",
 )
-
 
 REWRITE_PLAYLIST = env_bool(
     "REWRITE_PLAYLIST",
     True,
 )
 
-
 FILMON_COOKIE = os.getenv(
     "FILMON_COOKIE",
     "",
 )
-
 
 API_URL = os.getenv(
     "FILMON_API",
     "https://www.filmon.com/ajax/getChannelInfo",
 )
 
-
 EPG_ENABLED = env_bool(
     "EPG_ENABLED",
     True,
 )
-
 
 EPG_OUT_PATH = Path(
     os.getenv(
@@ -182,7 +156,6 @@ EPG_OUT_PATH = Path(
     )
 )
 
-
 EPG_REFRESH_HOURS = float(
     os.getenv(
         "EPG_REFRESH_HOURS",
@@ -190,12 +163,10 @@ EPG_REFRESH_HOURS = float(
     )
 )
 
-
 EPG_API = os.getenv(
     "FILMON_EPG_API",
     "https://www.filmon.com/api-v2/tvguide/{}",
 )
-
 
 USER_AGENT = os.getenv(
     "USER_AGENT",
@@ -216,14 +187,12 @@ HLS_TOKEN_TTL = int(
     )
 )
 
-
 HLS_UPSTREAM_REFRESH = int(
     os.getenv(
         "HLS_UPSTREAM_REFRESH",
         "30",
     )
 )
-
 
 HLS_TIMEOUT = int(
     os.getenv(
@@ -232,7 +201,6 @@ HLS_TIMEOUT = int(
     )
 )
 
-
 HLS_RETRY_COUNT = int(
     os.getenv(
         "HLS_RETRY_COUNT",
@@ -240,19 +208,20 @@ HLS_RETRY_COUNT = int(
     )
 )
 
-
+# Local cached MPEG-TS segments.
+#
+# These should live longer than the normal live-window race.
 HLS_SEGMENT_CACHE_TTL = int(
     os.getenv(
         "HLS_SEGMENT_CACHE_TTL",
-        "120",
+        "300",
     )
 )
-
 
 HLS_SEGMENT_CACHE_MAX = int(
     os.getenv(
         "HLS_SEGMENT_CACHE_MAX",
-        "512",
+        "1024",
     )
 )
 
@@ -268,7 +237,6 @@ HEADERS = {
     "Referer": "https://www.filmon.com/",
     "X-Requested-With": "XMLHttpRequest",
 }
-
 
 if FILMON_COOKIE:
     HEADERS["Cookie"] = FILMON_COOKIE
@@ -289,12 +257,10 @@ stats: Counter = Counter()
 
 _local = threading.local()
 
-
 WARMUP_URL = os.getenv(
     "FILMON_WARMUP_URL",
     "https://www.filmon.com/tv/bbc-news",
 )
-
 
 _logged_cookies = False
 
@@ -305,9 +271,7 @@ def new_session() -> requests.Session:
 
     s = requests.Session()
 
-    s.headers.update(
-        HEADERS
-    )
+    s.headers.update(HEADERS)
 
     if not FILMON_COOKIE:
 
@@ -345,10 +309,7 @@ def new_session() -> requests.Session:
 
 def get_session() -> requests.Session:
 
-    if not hasattr(
-        _local,
-        "s",
-    ):
+    if not hasattr(_local, "s"):
 
         _local.s = new_session()
 
@@ -366,10 +327,7 @@ def get_channel_data(
 
     j = None
 
-    for attempt in (
-        1,
-        2,
-    ):
+    for attempt in (1, 2):
 
         try:
 
@@ -384,10 +342,7 @@ def get_channel_data(
                 timeout=15,
             )
 
-            if r.status_code in (
-                404,
-                405,
-            ):
+            if r.status_code in (404, 405):
 
                 r = s.get(
                     API_URL,
@@ -402,25 +357,19 @@ def get_channel_data(
 
         except Exception as e:
 
-            if stats[
-                "request_failed"
-            ] < 3:
+            if stats["request_failed"] < 3:
 
                 print(
                     f"Request for channel {n} failed: {e!r}"
                 )
 
-            stats[
-                "request_failed"
-            ] += 1
+            stats["request_failed"] += 1
 
             return None
 
         if (
             isinstance(j, dict)
-            and j.get(
-                "streamName"
-            ) == "maintenance"
+            and j.get("streamName") == "maintenance"
             and attempt == 1
             and not FILMON_COOKIE
         ):
@@ -433,10 +382,7 @@ def get_channel_data(
 
     if (
         isinstance(j, dict)
-        and isinstance(
-            j.get("data"),
-            dict,
-        )
+        and isinstance(j.get("data"), dict)
     ):
 
         j = j["data"]
@@ -469,9 +415,7 @@ def _get_stream_url(
         (
             s
             for s in streams
-            if s.get(
-                "quality"
-            ) == PREFERRED_QUALITY
+            if s.get("quality") == PREFERRED_QUALITY
         ),
         streams[0],
     )
@@ -498,20 +442,13 @@ def probe(n: int):
         or not d.get("streams")
     ):
 
-        if (
-            d.get("streamName")
-            == "maintenance"
-        ):
+        if d.get("streamName") == "maintenance":
 
-            stats[
-                "maintenance_placeholder"
-            ] += 1
+            stats["maintenance_placeholder"] += 1
 
         else:
 
-            stats[
-                "no_channel_or_no_streams"
-            ] += 1
+            stats["no_channel_or_no_streams"] += 1
 
         if sum(
             stats[k]
@@ -547,9 +484,7 @@ def probe(n: int):
         )
     ):
 
-        stats[
-            "skipped_type"
-        ] += 1
+        stats["skipped_type"] += 1
 
         return None
 
@@ -558,9 +493,7 @@ def probe(n: int):
         and not d.get("is_free")
     ):
 
-        stats[
-            "not_free"
-        ] += 1
+        stats["not_free"] += 1
 
         return None
 
@@ -572,21 +505,15 @@ def probe(n: int):
         )
     ):
 
-        stats[
-            "no_hd_stream"
-        ] += 1
+        stats["no_hd_stream"] += 1
 
         return None
 
-    stats[
-        "kept"
-    ] += 1
+    stats["kept"] += 1
 
     if not d.get("is_free"):
 
-        stats[
-            "kept_but_not_flagged_free"
-        ] += 1
+        stats["kept_but_not_flagged_free"] += 1
 
     return {
         "id": n,
@@ -600,9 +527,7 @@ def probe(n: int):
 
 def build_m3u() -> str:
 
-    lines = [
-        "#EXTM3U"
-    ]
+    lines = ["#EXTM3U"]
 
     for c in channels:
 
@@ -623,10 +548,7 @@ def build_m3u() -> str:
             f"{c['id']}.m3u8"
         )
 
-    return (
-        "\n".join(lines)
-        + "\n"
-    )
+    return "\n".join(lines) + "\n"
 
 
 def write_m3u() -> None:
@@ -638,18 +560,14 @@ def write_m3u() -> None:
             exist_ok=True,
         )
 
-        tmp = M3U_OUT_PATH.with_suffix(
-            ".tmp"
-        )
+        tmp = M3U_OUT_PATH.with_suffix(".tmp")
 
         tmp.write_text(
             build_m3u(),
             encoding="utf-8",
         )
 
-        tmp.replace(
-            M3U_OUT_PATH
-        )
+        tmp.replace(M3U_OUT_PATH)
 
         os.chmod(
             M3U_OUT_PATH,
@@ -677,9 +595,7 @@ def scan() -> None:
 
     stats.clear()
 
-    with ThreadPoolExecutor(
-        WORKERS
-    ) as ex:
+    with ThreadPoolExecutor(WORKERS) as ex:
 
         found = [
             c
@@ -757,10 +673,7 @@ def background() -> None:
                 - CACHE_FILE.stat().st_mtime
             )
 
-            if (
-                age
-                < REFRESH_HOURS * 3600
-            ):
+            if age < REFRESH_HOURS * 3600:
 
                 time.sleep(
                     REFRESH_HOURS * 3600
@@ -791,10 +704,7 @@ epg_stats: Counter = Counter()
 
 def parse_guide(j) -> list:
 
-    if isinstance(
-        j,
-        dict,
-    ):
+    if isinstance(j, dict):
 
         for key in (
             "data",
@@ -803,10 +713,7 @@ def parse_guide(j) -> list:
             "tvguide",
         ):
 
-            if isinstance(
-                j.get(key),
-                list,
-            ):
+            if isinstance(j.get(key), list):
 
                 return j[key]
 
@@ -834,9 +741,7 @@ def fetch_guide(n: int) -> list:
 
     except Exception:
 
-        epg_stats[
-            "failed"
-        ] += 1
+        epg_stats["failed"] += 1
 
         return []
 
@@ -853,9 +758,7 @@ def fetch_guide(n: int) -> list:
 
     if not items:
 
-        epg_stats[
-            "empty"
-        ] += 1
+        epg_stats["empty"] += 1
 
     return items
 
@@ -896,10 +799,7 @@ def build_epg_xml(
 
     for c in snapshot:
 
-        for p in guides.get(
-            c["id"],
-            [],
-        ):
+        for p in guides.get(c["id"], []):
 
             try:
 
@@ -922,9 +822,7 @@ def build_epg_xml(
                 f'<title>{escape(str(p["programme_name"]))}</title>',
             ]
 
-            if p.get(
-                "programme_description"
-            ):
+            if p.get("programme_description"):
 
                 parts.append(
                     f'<desc>{escape(str(p["programme_description"]))}</desc>'
@@ -933,8 +831,7 @@ def build_epg_xml(
             imgs = [
                 i.get("url")
                 for i in (
-                    p.get("images")
-                    or []
+                    p.get("images") or []
                 )
                 if (
                     isinstance(i, dict)
@@ -948,31 +845,20 @@ def build_epg_xml(
                     f'<icon src={quoteattr(imgs[0])}/>'
                 )
 
-            parts.append(
-                "</programme>"
-            )
+            parts.append("</programme>")
 
-            out.append(
-                "".join(parts)
-            )
+            out.append("".join(parts))
 
-    out.append(
-        "</tv>"
-    )
+    out.append("</tv>")
 
-    return (
-        "\n".join(out)
-        + "\n"
-    )
+    return "\n".join(out) + "\n"
 
 
 def refresh_epg() -> None:
 
     global epg_xml
 
-    snapshot = list(
-        channels
-    )
+    snapshot = list(channels)
 
     if not snapshot:
         return
@@ -984,9 +870,7 @@ def refresh_epg() -> None:
         for c in snapshot
     ]
 
-    with ThreadPoolExecutor(
-        WORKERS
-    ) as ex:
+    with ThreadPoolExecutor(WORKERS) as ex:
 
         guides = dict(
             zip(
@@ -1031,18 +915,14 @@ def refresh_epg() -> None:
             exist_ok=True,
         )
 
-        tmp = EPG_OUT_PATH.with_suffix(
-            ".tmp"
-        )
+        tmp = EPG_OUT_PATH.with_suffix(".tmp")
 
         tmp.write_text(
             epg_xml,
             encoding="utf-8",
         )
 
-        tmp.replace(
-            EPG_OUT_PATH
-        )
+        tmp.replace(EPG_OUT_PATH)
 
         os.chmod(
             EPG_OUT_PATH,
@@ -1107,7 +987,12 @@ _hls_urls = {}
 
 
 #
-# Recently downloaded media segments.
+# token -> {
+#     "body": bytes,
+#     "content_type": str,
+#     "created": float,
+#     "sequence": int | None,
+# }
 #
 
 _hls_segment_cache = {}
@@ -1119,20 +1004,14 @@ def _cleanup_hls_state() -> None:
 
     with _hls_lock:
 
-        cutoff = (
-            now
-            - HLS_TOKEN_TTL
-        )
+        cutoff = now - HLS_TOKEN_TTL
 
         for key, value in list(
             _hls_urls.items()
         ):
 
             if (
-                value.get(
-                    "created",
-                    0,
-                )
+                value.get("created", 0)
                 < cutoff
             ):
 
@@ -1151,16 +1030,13 @@ def _cleanup_hls_state() -> None:
         ):
 
             if (
-                value.get(
-                    "created",
-                    0,
-                )
+                value.get("created", 0)
                 < segment_cutoff
             ):
 
                 _hls_segment_cache.pop(
                     key,
-                    None
+                    None,
                 )
 
         if (
@@ -1182,9 +1058,7 @@ def _cleanup_hls_state() -> None:
                 - HLS_SEGMENT_CACHE_MAX
             )
 
-            for key, _ in ordered[
-                :remove_count
-            ]:
+            for key, _ in ordered[:remove_count]:
 
                 _hls_segment_cache.pop(
                     key,
@@ -1234,9 +1108,7 @@ def _hls_url(
 
     if kind is None:
 
-        path = urlparse(
-            url
-        ).path.lower()
+        path = urlparse(url).path.lower()
 
         if (
             path.endswith(".m3u8")
@@ -1272,25 +1144,15 @@ def _get_hls_item(
 
     with _hls_lock:
 
-        item = _hls_urls.get(
-            token
-        )
+        item = _hls_urls.get(token)
 
         if not item:
             return None
 
-        if (
-            item.get(
-                "channel"
-            )
-            != channel
-        ):
-
+        if item.get("channel") != channel:
             return None
 
-        return dict(
-            item
-        )
+        return dict(item)
 
 
 def _update_hls_url(
@@ -1301,27 +1163,17 @@ def _update_hls_url(
 
     with _hls_lock:
 
-        item = _hls_urls.get(
-            token
-        )
+        item = _hls_urls.get(token)
 
         if not item:
             return False
 
-        if (
-            item.get(
-                "channel"
-            )
-            != channel
-        ):
-
+        if item.get("channel") != channel:
             return False
 
         item["url"] = url
 
-        item[
-            "last_refresh"
-        ] = time.time()
+        item["last_refresh"] = time.time()
 
         return True
 
@@ -1335,29 +1187,17 @@ def _update_hls_segment(
 
     with _hls_lock:
 
-        item = _hls_urls.get(
-            token
-        )
+        item = _hls_urls.get(token)
 
         if not item:
             return False
 
-        if (
-            item.get(
-                "channel"
-            )
-            != channel
-        ):
-
+        if item.get("channel") != channel:
             return False
 
         item["url"] = url
-
         item["sequence"] = sequence
-
-        item[
-            "last_refresh"
-        ] = time.time()
+        item["last_refresh"] = time.time()
 
         return True
 
@@ -1389,6 +1229,7 @@ def _get_variant_urls(
         ):
 
             waiting_for_variant = True
+
             continue
 
         if waiting_for_variant:
@@ -1416,22 +1257,6 @@ def _get_media_segments(
     manifest_url: str,
     body: str,
 ) -> tuple[int, list[tuple[int, str]]]:
-    """
-    Parse a media playlist and return:
-
-        (media_sequence_start, [(sequence, absolute_url), ...])
-
-    Example:
-
-        #EXT-X-MEDIA-SEQUENCE:1120
-
-        segment A -> 1120
-        segment B -> 1121
-        segment C -> 1122
-
-    This lets us refresh an expired signed URL while preserving
-    the exact HLS segment Jellyfin requested.
-    """
 
     media_sequence = 0
 
@@ -1443,15 +1268,13 @@ def _get_media_segments(
             "#EXT-X-MEDIA-SEQUENCE:"
         ):
 
-            value = stripped.split(
-                ":",
-                1,
-            )[1].strip()
-
             try:
 
                 media_sequence = int(
-                    value
+                    stripped.split(
+                        ":",
+                        1,
+                    )[1].strip()
                 )
 
             except ValueError:
@@ -1475,15 +1298,12 @@ def _get_media_segments(
 
         if stripped.startswith("#"):
 
-            if stripped.startswith(
-                "#EXTINF:"
-            ):
+            if stripped.startswith("#EXTINF:"):
 
                 waiting_for_segment = True
 
             continue
 
-        # A normal URI following EXTINF is a media segment.
         if waiting_for_segment:
 
             absolute = urljoin(
@@ -1548,7 +1368,7 @@ def _refresh_hls_session(
     )
 
     # --------------------------------------------------------
-    # VARIANT PLAYLIST
+    # VARIANT
     # --------------------------------------------------------
 
     if kind == "variant":
@@ -1560,8 +1380,7 @@ def _refresh_hls_session(
         if not fresh_master_url:
 
             print(
-                f"HLS: unable to get fresh "
-                f"master URL "
+                f"HLS: unable to get fresh master URL "
                 f"channel={channel}"
             )
 
@@ -1576,9 +1395,8 @@ def _refresh_hls_session(
         except requests.RequestException as e:
 
             print(
-                f"HLS: variant master refresh "
-                f"failed channel={channel}: "
-                f"{e!r}"
+                f"HLS: variant master refresh failed "
+                f"channel={channel}: {e!r}"
             )
 
             return None
@@ -1586,9 +1404,8 @@ def _refresh_hls_session(
         if r.status_code != 200:
 
             print(
-                f"HLS: variant master refresh "
-                f"HTTP {r.status_code} "
-                f"channel={channel}"
+                f"HLS: variant master refresh HTTP "
+                f"{r.status_code} channel={channel}"
             )
 
             return None
@@ -1598,8 +1415,8 @@ def _refresh_hls_session(
         if "#EXTM3U" not in master_body:
 
             print(
-                f"HLS: fresh master is not "
-                f"a manifest channel={channel}"
+                f"HLS: fresh master is not a manifest "
+                f"channel={channel}"
             )
 
             return None
@@ -1628,9 +1445,7 @@ def _refresh_hls_session(
 
             return None
 
-        fresh_variant_url = variants[
-            index
-        ]
+        fresh_variant_url = variants[index]
 
         if not _update_hls_url(
             channel,
@@ -1649,7 +1464,7 @@ def _refresh_hls_session(
         return fresh_variant_url
 
     # --------------------------------------------------------
-    # ROOT / MASTER PLAYLIST
+    # ROOT MASTER
     # --------------------------------------------------------
 
     if kind == "playlist":
@@ -1675,43 +1490,13 @@ def _refresh_hls_session(
 
 
 # ============================================================
-# HLS SEGMENT REFRESH - SEQUENCE AWARE
+# HLS SEGMENT REFRESH
 # ============================================================
 
 def _refresh_segment_from_parent(
     channel: int,
     segment_token: str,
 ):
-    """
-    Refresh an expired segment through its parent variant.
-
-    IMPORTANT:
-
-    We do NOT fall back to the newest segment.
-
-    Instead, the segment token contains the HLS
-    MEDIA-SEQUENCE number that was assigned when the original
-    local playlist was generated.
-
-    Example:
-
-        local segment token
-        sequence=1120
-
-    Parent variant is refreshed:
-
-        1118
-        1119
-        1120   <-- exact match
-        1121
-        1122
-
-    Only sequence 1120 is accepted.
-
-    If FilmOn has already removed sequence 1120 from its live
-    window, this function returns None rather than giving
-    Jellyfin a different segment.
-    """
 
     item = _get_hls_item(
         channel,
@@ -1729,44 +1514,21 @@ def _refresh_segment_from_parent(
 
         print(
             f"HLS: segment has no parent variant "
-            f"channel={channel} "
-            f"token={segment_token}"
+            f"channel={channel} token={segment_token}"
         )
 
         return None
 
-    sequence = item.get(
-        "sequence"
-    )
+    sequence = item.get("sequence")
 
     if sequence is None:
 
         print(
             f"HLS: segment has no MEDIA-SEQUENCE "
-            f"channel={channel} "
-            f"token={segment_token}"
+            f"channel={channel} token={segment_token}"
         )
 
         return None
-
-    parent = _get_hls_item(
-        channel,
-        parent_token,
-    )
-
-    if not parent:
-
-        print(
-            f"HLS: parent variant token missing "
-            f"channel={channel} "
-            f"parent={parent_token}"
-        )
-
-        return None
-
-    # --------------------------------------------------------
-    # Force refresh the parent variant.
-    # --------------------------------------------------------
 
     variant_url = _refresh_hls_session(
         channel,
@@ -1777,8 +1539,8 @@ def _refresh_segment_from_parent(
     if not variant_url:
 
         print(
-            f"HLS: unable to refresh parent "
-            f"variant channel={channel}"
+            f"HLS: unable to refresh parent variant "
+            f"channel={channel}"
         )
 
         return None
@@ -1792,9 +1554,8 @@ def _refresh_segment_from_parent(
     except requests.RequestException as e:
 
         print(
-            f"HLS: segment parent request "
-            f"failed channel={channel}: "
-            f"{e!r}"
+            f"HLS: segment parent request failed "
+            f"channel={channel}: {e!r}"
         )
 
         return None
@@ -1803,8 +1564,7 @@ def _refresh_segment_from_parent(
 
         print(
             f"HLS: refreshed variant HTTP "
-            f"{r.status_code} "
-            f"channel={channel}"
+            f"{r.status_code} channel={channel}"
         )
 
         return None
@@ -1813,11 +1573,6 @@ def _refresh_segment_from_parent(
 
     if not _is_manifest(body):
 
-        print(
-            f"HLS: refreshed parent is not "
-            f"a manifest channel={channel}"
-        )
-
         return None
 
     text_body = body.decode(
@@ -1825,38 +1580,21 @@ def _refresh_segment_from_parent(
         errors="replace",
     )
 
-    _media_sequence, fresh_segments = (
-        _get_media_segments(
-            r.url,
-            text_body,
-        )
+    _, fresh_segments = _get_media_segments(
+        r.url,
+        text_body,
     )
-
-    if not fresh_segments:
-
-        print(
-            f"HLS: refreshed variant has no "
-            f"segments channel={channel}"
-        )
-
-        return None
-
-    # --------------------------------------------------------
-    # Find EXACT requested MEDIA-SEQUENCE.
-    # --------------------------------------------------------
 
     for fresh_sequence, fresh_url in fresh_segments:
 
         if fresh_sequence == sequence:
 
-            if not _update_hls_segment(
+            _update_hls_segment(
                 channel,
                 segment_token,
                 fresh_url,
                 fresh_sequence,
-            ):
-
-                return None
+            )
 
             print(
                 f"HLS: refreshed segment "
@@ -1866,21 +1604,18 @@ def _refresh_segment_from_parent(
 
             return fresh_url
 
-    # --------------------------------------------------------
-    # Requested segment has already left the live window.
-    #
-    # DO NOT substitute a newer segment.
-    # --------------------------------------------------------
+    if fresh_segments:
 
-    first_sequence = fresh_segments[0][0]
-    last_sequence = fresh_segments[-1][0]
+        first_sequence = fresh_segments[0][0]
+        last_sequence = fresh_segments[-1][0]
 
-    print(
-        f"HLS: requested segment sequence "
-        f"{sequence} is no longer available "
-        f"channel={channel} "
-        f"live_window={first_sequence}-{last_sequence}"
-    )
+        print(
+            f"HLS: requested segment sequence "
+            f"{sequence} is no longer available "
+            f"channel={channel} "
+            f"live_window="
+            f"{first_sequence}-{last_sequence}"
+        )
 
     return None
 
@@ -1889,9 +1624,7 @@ def _refresh_segment_from_parent(
 # HLS HTTP HELPERS
 # ============================================================
 
-def _fetch_hls(
-    url: str,
-):
+def _fetch_hls(url: str):
 
     return get_session().get(
         url,
@@ -1907,27 +1640,27 @@ def _is_manifest(
 
     try:
 
-        probe = body[
-            :1024
-        ].decode(
+        probe = body[:1024].decode(
             "utf-8",
             errors="ignore",
         )
 
-        return (
-            "#EXTM3U"
-            in probe
-        )
+        return "#EXTM3U" in probe
 
     except Exception:
 
         return False
 
 
+# ============================================================
+# SEGMENT CACHE
+# ============================================================
+
 def _cache_segment(
     token: str,
     body: bytes,
     content_type: str,
+    sequence: int | None = None,
 ) -> None:
 
     with _hls_lock:
@@ -1936,6 +1669,7 @@ def _cache_segment(
             "body": body,
             "content_type": content_type,
             "created": time.time(),
+            "sequence": sequence,
         }
 
     _cleanup_hls_state()
@@ -1947,19 +1681,14 @@ def _get_cached_segment(
 
     with _hls_lock:
 
-        item = _hls_segment_cache.get(
-            token
-        )
+        item = _hls_segment_cache.get(token)
 
         if not item:
             return None
 
         if (
             time.time()
-            - item.get(
-                "created",
-                0,
-            )
+            - item.get("created", 0)
         ) > HLS_SEGMENT_CACHE_TTL:
 
             _hls_segment_cache.pop(
@@ -1971,10 +1700,117 @@ def _get_cached_segment(
 
         return {
             "body": item["body"],
-            "content_type": item[
-                "content_type"
-            ],
+            "content_type": item["content_type"],
+            "sequence": item.get("sequence"),
         }
+
+
+# ============================================================
+# SEGMENT PREFETCH
+# ============================================================
+
+def _prefetch_segments(
+    channel: int,
+    manifest_url: str,
+    body: str,
+    segment_tokens: list[tuple[str, int, str]],
+) -> None:
+    """
+    Immediately download the segments advertised by the
+    current media playlist.
+
+    This is the important part of the proxy.
+
+    FilmOn's signed segment URLs can become invalid while
+    Jellyfin is still processing the playlist.
+
+    By downloading them immediately, Jellyfin can request
+    the local token later and receive the cached MPEG-TS.
+    """
+
+    if not segment_tokens:
+        return
+
+    def prefetch_one(item):
+
+        token, sequence, upstream_url = item
+
+        # Don't download a segment that is already cached.
+        cached = _get_cached_segment(token)
+
+        if cached:
+            return
+
+        try:
+
+            r = _fetch_hls(
+                upstream_url
+            )
+
+            if r.status_code != 200:
+
+                print(
+                    f"HLS prefetch HTTP "
+                    f"{r.status_code} "
+                    f"channel={channel} "
+                    f"sequence={sequence}"
+                )
+
+                return
+
+            if not r.content:
+
+                print(
+                    f"HLS prefetch empty body "
+                    f"channel={channel} "
+                    f"sequence={sequence}"
+                )
+
+                return
+
+            content_type = (
+                r.headers.get(
+                    "Content-Type"
+                )
+                or "video/mp2t"
+            )
+
+            _cache_segment(
+                token,
+                r.content,
+                content_type,
+                sequence=sequence,
+            )
+
+            print(
+                f"HLS: prefetched segment "
+                f"channel={channel} "
+                f"sequence={sequence}"
+            )
+
+        except requests.RequestException as e:
+
+            print(
+                f"HLS prefetch failed "
+                f"channel={channel} "
+                f"sequence={sequence}: "
+                f"{e!r}"
+            )
+
+    # Fetch all current live-window segments concurrently.
+    with ThreadPoolExecutor(
+        max_workers=min(
+            5,
+            len(segment_tokens),
+        )
+    ) as ex:
+
+        list(
+            ex.map(
+                prefetch_one,
+                segment_tokens,
+            )
+        )
 
 
 # ============================================================
@@ -1988,27 +1824,17 @@ def _rewrite_hls_manifest(
     parent_variant_token: str | None = None,
 ) -> str:
     """
-    Rewrite all URLs inside an HLS manifest.
+    Rewrite HLS manifest URLs.
 
-    Master playlist variants are stored as:
+    For media playlists:
 
-        kind="variant"
+      1. Create stable local tokens.
+      2. Store exact MEDIA-SEQUENCE.
+      3. Immediately prefetch every advertised segment.
 
-    Media segments are stored as:
-
-        kind="segment"
-
-    Every media segment stores:
-
-        - parent_variant_token
-        - MEDIA-SEQUENCE
-
-    This makes segment refresh sequence-aware.
+    The prefetch prevents the FilmOn signed URL from expiring
+    before Jellyfin requests it.
     """
-
-    # --------------------------------------------------------
-    # Determine whether this is a media playlist.
-    # --------------------------------------------------------
 
     is_media_playlist = (
         "#EXT-X-MEDIA-SEQUENCE:" in body
@@ -2048,11 +1874,14 @@ def _rewrite_hls_manifest(
 
     variant_index = 0
 
-    waiting_for_variant = False
-
     segment_sequence = media_sequence_start
 
+    waiting_for_variant = False
+
     waiting_for_segment = False
+
+    # token, sequence, upstream URL
+    prefetch_items = []
 
     for line in lines:
 
@@ -2075,7 +1904,6 @@ def _rewrite_hls_manifest(
                 def replace_uri(match):
 
                     quote = match.group(1)
-
                     raw = match.group(2)
 
                     absolute = urljoin(
@@ -2114,16 +1942,14 @@ def _rewrite_hls_manifest(
 
             continue
 
-        # ----------------------------------------------------
-        # URI after EXT-X-STREAM-INF
-        #
-        # This is a variant media playlist.
-        # ----------------------------------------------------
-
         absolute = urljoin(
             manifest_url,
             stripped,
         )
+
+        # ----------------------------------------------------
+        # Master playlist variant
+        # ----------------------------------------------------
 
         if waiting_for_variant:
 
@@ -2143,20 +1969,31 @@ def _rewrite_hls_manifest(
             continue
 
         # ----------------------------------------------------
-        # Media segment.
+        # Media segment
         # ----------------------------------------------------
 
         if is_media_playlist:
 
+            token = _hls_token(
+                channel,
+                absolute,
+                kind="segment",
+                parent_variant_token=(
+                    parent_variant_token
+                ),
+                sequence=segment_sequence,
+            )
+
             out.append(
-                _hls_url(
-                    channel,
+                f"{PUBLIC_BASE_URL}"
+                f"/hls/{channel}/{token}"
+            )
+
+            prefetch_items.append(
+                (
+                    token,
+                    segment_sequence,
                     absolute,
-                    kind="segment",
-                    parent_variant_token=(
-                        parent_variant_token
-                    ),
-                    sequence=segment_sequence,
                 )
             )
 
@@ -2164,25 +2001,40 @@ def _rewrite_hls_manifest(
 
             waiting_for_segment = False
 
-        else:
+            continue
 
-            # Generic URI not associated with a known media
-            # playlist. Preserve it as a proxied segment.
-            out.append(
-                _hls_url(
-                    channel,
-                    absolute,
-                    kind="segment",
-                    parent_variant_token=(
-                        parent_variant_token
-                    ),
-                )
+        # ----------------------------------------------------
+        # Generic URI
+        # ----------------------------------------------------
+
+        out.append(
+            _hls_url(
+                channel,
+                absolute,
+                kind="segment",
+                parent_variant_token=(
+                    parent_variant_token
+                ),
             )
+        )
 
-    return (
-        "\n".join(out)
-        + "\n"
-    )
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # Prefetch the segments AFTER all local tokens have been
+    # created.
+    # --------------------------------------------------------
+
+    if prefetch_items:
+
+        _prefetch_segments(
+            channel,
+            manifest_url,
+            body,
+            prefetch_items,
+        )
+
+    return "\n".join(out) + "\n"
 
 
 # ============================================================
@@ -2203,9 +2055,21 @@ def index():
 @app.get("/health")
 def health():
 
+    with _hls_lock:
+
+        cached_segments = len(
+            _hls_segment_cache
+        )
+
+        hls_tokens = len(
+            _hls_urls
+        )
+
     return {
         "channels": len(channels),
         "last_scan_stats": dict(stats),
+        "hls_tokens": hls_tokens,
+        "cached_segments": cached_segments,
     }
 
 
@@ -2228,6 +2092,19 @@ def playlist():
     )
 
 
+@app.get("/guide.xml")
+def guide():
+
+    if not epg_xml:
+
+        abort(404)
+
+    return Response(
+        epg_xml,
+        mimetype="application/xml",
+    )
+
+
 # ============================================================
 # MAIN STABLE HLS ENTRY POINT
 # ============================================================
@@ -2235,9 +2112,7 @@ def playlist():
 @app.get("/stream/<int:n>.m3u8")
 def stream(n: int):
 
-    url = _get_stream_url(
-        n
-    )
+    url = _get_stream_url(n)
 
     if not url:
 
@@ -2250,9 +2125,7 @@ def stream(n: int):
             code=302,
         )
 
-    r = _fetch_hls(
-        url
-    )
+    r = _fetch_hls(url)
 
     if r.status_code in (
         401,
@@ -2260,17 +2133,13 @@ def stream(n: int):
         404,
     ):
 
-        url = _get_stream_url(
-            n
-        )
+        url = _get_stream_url(n)
 
         if not url:
 
             abort(404)
 
-        r = _fetch_hls(
-            url
-        )
+        r = _fetch_hls(url)
 
     if r.status_code != 200:
 
@@ -2304,9 +2173,7 @@ def stream(n: int):
 
     return Response(
         out,
-        mimetype=(
-            "application/vnd.apple.mpegurl"
-        ),
+        mimetype="application/vnd.apple.mpegurl",
         headers={
             "Cache-Control":
                 "no-store, "
@@ -2342,9 +2209,13 @@ def hls_proxy(
         "unknown",
     )
 
-    # --------------------------------------------------------
-    # SEGMENT CACHE
-    # --------------------------------------------------------
+    # ========================================================
+    # SEGMENT
+    #
+    # FIRST attempt = local cache.
+    #
+    # This is the critical fix.
+    # ========================================================
 
     if kind == "segment":
 
@@ -2369,28 +2240,25 @@ def hls_proxy(
                 },
             )
 
-    # --------------------------------------------------------
-    # PLAYLIST / VARIANT REFRESH
-    # --------------------------------------------------------
+    # ========================================================
+    # PLAYLIST / VARIANT
+    # ========================================================
 
     if kind in (
         "playlist",
         "variant",
     ):
 
-        upstream_url = (
-            _refresh_hls_session(
-                n,
-                token,
-            )
+        upstream_url = _refresh_hls_session(
+            n,
+            token,
         )
 
         if not upstream_url:
 
             print(
-                f"HLS: unable to refresh "
-                f"FilmOn playlist "
-                f"channel={n} "
+                f"HLS: unable to refresh FilmOn "
+                f"playlist channel={n} "
                 f"kind={kind}"
             )
 
@@ -2398,12 +2266,11 @@ def hls_proxy(
 
     else:
 
-        # Media segment.
         upstream_url = item["url"]
 
-    # --------------------------------------------------------
-    # FETCH UPSTREAM
-    # --------------------------------------------------------
+    # ========================================================
+    # UPSTREAM FETCH
+    # ========================================================
 
     r = None
 
@@ -2432,16 +2299,15 @@ def hls_proxy(
         except requests.RequestException as e:
 
             print(
-                f"HLS upstream request "
-                f"failed channel={n} "
+                f"HLS upstream request failed "
+                f"channel={n} "
                 f"kind={kind} "
                 f"attempt={attempt + 1}: "
                 f"{e!r}"
             )
 
         # ----------------------------------------------------
-        # Playlist / variant:
-        # refresh their own URL.
+        # Playlist / variant refresh
         # ----------------------------------------------------
 
         if kind in (
@@ -2449,22 +2315,18 @@ def hls_proxy(
             "variant",
         ):
 
-            upstream_url = (
-                _refresh_hls_session(
-                    n,
-                    token,
-                    force=True,
-                )
+            upstream_url = _refresh_hls_session(
+                n,
+                token,
+                force=True,
             )
 
             if not upstream_url:
+
                 break
 
         # ----------------------------------------------------
-        # Segment:
-        #
-        # Refresh parent variant and locate the EXACT
-        # MEDIA-SEQUENCE requested by Jellyfin.
+        # Segment refresh
         # ----------------------------------------------------
 
         elif kind == "segment":
@@ -2478,26 +2340,48 @@ def hls_proxy(
 
             if not upstream_url:
 
-                # The requested segment has probably already
-                # left the upstream live window.
                 break
 
-        time.sleep(
-            0.25
-        )
+        time.sleep(0.25)
 
-    # --------------------------------------------------------
-    # UPSTREAM FAILED
-    # --------------------------------------------------------
+    # ========================================================
+    # FAILED
+    # ========================================================
 
     if (
         not r
         or r.status_code != 200
     ):
 
+        # One final cache check.
+        #
+        # A prefetch may have completed while the upstream
+        # request was failing.
+        if kind == "segment":
+
+            cached = _get_cached_segment(
+                token
+            )
+
+            if cached:
+
+                return Response(
+                    cached["body"],
+                    content_type=(
+                        cached["content_type"]
+                        or "video/mp2t"
+                    ),
+                    headers={
+                        "Cache-Control":
+                            "no-store, "
+                            "no-cache, "
+                            "must-revalidate, "
+                            "max-age=0",
+                    },
+                )
+
         print(
-            f"HLS upstream failed "
-            f"permanently "
+            f"HLS upstream failed permanently "
             f"channel={n} "
             f"kind={kind} "
             f"token={token}"
@@ -2506,10 +2390,6 @@ def hls_proxy(
         abort(502)
 
     body = r.content
-
-    # --------------------------------------------------------
-    # Protect against empty upstream responses.
-    # --------------------------------------------------------
 
     if not body:
 
@@ -2528,9 +2408,9 @@ def hls_proxy(
         or ""
     ).lower()
 
-    # --------------------------------------------------------
+    # ========================================================
     # NESTED PLAYLIST
-    # --------------------------------------------------------
+    # ========================================================
 
     if _is_manifest(body):
 
@@ -2563,9 +2443,7 @@ def hls_proxy(
 
         return Response(
             out,
-            mimetype=(
-                "application/vnd.apple.mpegurl"
-            ),
+            mimetype="application/vnd.apple.mpegurl",
             headers={
                 "Cache-Control":
                     "no-store, "
@@ -2576,17 +2454,17 @@ def hls_proxy(
             },
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # MEDIA SEGMENT
-    # --------------------------------------------------------
+    # ========================================================
 
     if kind == "segment":
 
         _cache_segment(
             token,
             body,
-            content_type
-            or "video/mp2t",
+            content_type or "video/mp2t",
+            sequence=item.get("sequence"),
         )
 
     return Response(
