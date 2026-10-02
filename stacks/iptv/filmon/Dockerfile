@@ -9,4 +9,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8765
 
 # 1 worker only: the channel list lives in memory and a background thread refreshes it
-CMD ["gunicorn", "-w", "1", "--threads", "8", "-b", "0.0.0.0:8765", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "--capture-output", "filmon_proxy:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "8", "-b", "0.0.0.0:8765", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "--capture-output", "filmon_iptv:app"]
