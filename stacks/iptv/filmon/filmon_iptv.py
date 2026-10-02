@@ -209,8 +209,6 @@ HLS_RETRY_COUNT = int(
 )
 
 # Local cached MPEG-TS segments.
-#
-# These should live longer than the normal live-window race.
 HLS_SEGMENT_CACHE_TTL = int(
     os.getenv(
         "HLS_SEGMENT_CACHE_TTL",
@@ -1130,10 +1128,26 @@ def _hls_url(
         sequence,
     )
 
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # FFmpeg's HLS demuxer expects media segment URLs to have
+    # a recognized media extension.
+    #
+    # Keep playlist/variant URLs extensionless.
+    # Give actual MPEG-TS segment URLs a .ts suffix.
+    # --------------------------------------------------------
+
+    suffix = (
+        ".ts"
+        if kind == "segment"
+        else ""
+    )
+
     return (
         f"{PUBLIC_BASE_URL}"
         f"/hls/{channel}/"
-        f"{token}"
+        f"{token}{suffix}"
     )
 
 
@@ -1718,14 +1732,6 @@ def _prefetch_segments(
     """
     Immediately download the segments advertised by the
     current media playlist.
-
-    This is the important part of the proxy.
-
-    FilmOn's signed segment URLs can become invalid while
-    Jellyfin is still processing the playlist.
-
-    By downloading them immediately, Jellyfin can request
-    the local token later and receive the cached MPEG-TS.
     """
 
     if not segment_tokens:
@@ -1735,7 +1741,6 @@ def _prefetch_segments(
 
         token, sequence, upstream_url = item
 
-        # Don't download a segment that is already cached.
         cached = _get_cached_segment(token)
 
         if cached:
@@ -1797,7 +1802,6 @@ def _prefetch_segments(
                 f"{e!r}"
             )
 
-    # Fetch all current live-window segments concurrently.
     with ThreadPoolExecutor(
         max_workers=min(
             5,
@@ -1826,14 +1830,14 @@ def _rewrite_hls_manifest(
     """
     Rewrite HLS manifest URLs.
 
-    For media playlists:
+    Media playlists:
+      - create stable local tokens
+      - preserve MEDIA-SEQUENCE
+      - prefetch live segments
+      - expose segments as .ts URLs
 
-      1. Create stable local tokens.
-      2. Store exact MEDIA-SEQUENCE.
-      3. Immediately prefetch every advertised segment.
-
-    The prefetch prevents the FilmOn signed URL from expiring
-    before Jellyfin requests it.
+    Master playlists:
+      - create stable variant tokens
     """
 
     is_media_playlist = (
@@ -1984,9 +1988,12 @@ def _rewrite_hls_manifest(
                 sequence=segment_sequence,
             )
 
+            # IMPORTANT:
+            # Expose .ts so FFmpeg recognizes this as a
+            # media segment.
             out.append(
                 f"{PUBLIC_BASE_URL}"
-                f"/hls/{channel}/{token}"
+                f"/hls/{channel}/{token}.ts"
             )
 
             prefetch_items.append(
@@ -2019,10 +2026,7 @@ def _rewrite_hls_manifest(
         )
 
     # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # Prefetch the segments AFTER all local tokens have been
-    # created.
+    # Prefetch after all tokens have been created.
     # --------------------------------------------------------
 
     if prefetch_items:
@@ -2190,11 +2194,14 @@ def stream(n: int):
 # ============================================================
 
 @app.get("/hls/<int:n>/<token>")
+@app.get("/hls/<int:n>/<token>.ts")
 def hls_proxy(
     n: int,
     token: str,
 ):
 
+    # Flask's route for /token.ts passes the token without
+    # the .ts suffix because .ts is part of the route pattern.
     item = _get_hls_item(
         n,
         token,
@@ -2213,8 +2220,6 @@ def hls_proxy(
     # SEGMENT
     #
     # FIRST attempt = local cache.
-    #
-    # This is the critical fix.
     # ========================================================
 
     if kind == "segment":
@@ -2353,10 +2358,6 @@ def hls_proxy(
         or r.status_code != 200
     ):
 
-        # One final cache check.
-        #
-        # A prefetch may have completed while the upstream
-        # request was failing.
         if kind == "segment":
 
             cached = _get_cached_segment(
