@@ -88,6 +88,9 @@ def new_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(HEADERS)
     if not FILMON_COOKIE:
+        # FilmOn only starts its guest session on the "classic" site; without this cookie
+        # the visit redirects to the new /v2/ app and no session cookies are issued.
+        s.cookies.set("ftv_site_mode", "classic", domain="www.filmon.com", path="/")
         try:
             s.get(WARMUP_URL, timeout=15)
         except Exception as e:
