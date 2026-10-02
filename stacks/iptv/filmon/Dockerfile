@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 RUN pip install --no-cache-dir flask requests gunicorn
 
-COPY filmon_proxy.py .
+COPY filmon_iptv .
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8765
