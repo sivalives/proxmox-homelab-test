@@ -17,6 +17,7 @@ services:
       HLS_RETRY_COUNT: "3"
       HLS_PREFETCH_WORKERS: "8"
       HLS_BACKGROUND_INTERVAL: "2"
+      HLS_PREFETCH_ENABLED: "false"
     volumes:
       - /opt/jellyfin-data/iptv:/iptv
       - /opt/jellyfin-data/filmon-iptv-data:/data
