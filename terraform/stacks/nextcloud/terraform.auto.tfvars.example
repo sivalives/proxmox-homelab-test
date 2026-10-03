@@ -1,0 +1,3 @@
+# terraform/stacks/nextcloud/terraform.auto.tfvars.example
+proxmox_endpoint  = "https://YOUR_IP:8006/api2/json"
+proxmox_api_token = "root@pam!root=YOUR_TOKEN"

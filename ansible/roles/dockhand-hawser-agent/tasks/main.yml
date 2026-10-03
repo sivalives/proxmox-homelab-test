@@ -114,7 +114,7 @@
 
 - name: Start Hawser
   ansible.builtin.command:
-    cmd: docker compose up --force-recreate -d
+    cmd: docker compose up  -d --force-recreate
     chdir: "{{ hawser_compose_dir }}"
   register: hawser_compose
   changed_when: >

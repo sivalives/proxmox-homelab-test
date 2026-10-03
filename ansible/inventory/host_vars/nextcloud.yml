@@ -1,0 +1,10 @@
+# ansible/host_vars/nextcloud.yml
+hawser_openbao_path: "secret/nextcloud"
+docker_data_mount: /opt/nextcloud-data
+
+# Persistent application data
+app_storage:
+  - path: "{{ docker_data_mount }}
+    owner: "www-data"
+    group: "www-data"
+    mode: "0750"
