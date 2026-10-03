@@ -12,6 +12,16 @@ services:
       - db:/var/lib/postgresql/data
     networks:
       - nextcloud
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: nextcloud-postgres
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: nextcloud-postgres
 
   redis:
     image: redis:7-alpine
@@ -22,6 +32,16 @@ services:
       - redis:/data
     networks:
       - nextcloud
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: nextcloud-redis
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: nextcloud-redis
 
   nextcloud:
     image: nextcloud:latest
@@ -50,6 +70,16 @@ services:
       - /opt/nextcloud-data:/var/www/html/data
     networks:
       - nextcloud
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: nextcloud
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: nextcloud
 
 volumes:
   nextcloud:
