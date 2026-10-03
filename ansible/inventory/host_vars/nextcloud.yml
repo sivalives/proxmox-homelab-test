@@ -4,7 +4,7 @@ docker_data_mount: /opt/nextcloud-data
 
 # Persistent application data
 app_storage:
-  - path: "{{ docker_data_mount }}
+  - path: "{{ docker_data_mount }}"
     owner: "www-data"
     group: "www-data"
     mode: "0750"
