@@ -35,3 +35,9 @@ secret.tfvars
 *.tfstate.backup
 *.auto.tfvars
 .terraform/
+
+# Terraform state and vars (added after rebase cleanup)
+*.tfstate
+*.tfstate.*
+*.tfvars
+**/.bootstrap/
