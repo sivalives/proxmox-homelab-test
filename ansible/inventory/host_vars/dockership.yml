@@ -1,0 +1,3 @@
+# ansible/host_vars/dockership.yml
+hawser_openbao_path: "secret/dockership"
+docker_data_mount: /opt/docker-data
