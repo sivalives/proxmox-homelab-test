@@ -31,4 +31,7 @@ secret.tfvars
 
 
 #Ignore bootstrap/
-.bootstrap/
+.bootstrap/*.tfstate
+*.tfstate.backup
+*.auto.tfvars
+.terraform/
