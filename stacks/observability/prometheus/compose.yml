@@ -12,6 +12,16 @@ services:
       PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
       PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
       PVE_VERIFY_SSL: "false"
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: proxmox-exporter
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: proxmox-exporter
 
   prometheus:
     image: prom/prometheus:latest
@@ -31,6 +41,16 @@ services:
       - --storage.tsdb.retention.time=30d
     depends_on:
       - proxmox-exporter
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: prometheus
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: prometheus
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -48,6 +68,16 @@ services:
       - --storage.path=/alertmanager
     depends_on:
       - prometheus
+    logging:
+      driver: splunk
+      options:
+        splunk-url: ${SPLUNK_HEC_URL}
+        splunk-token: ${SPLUNK_HEC_TOKEN}
+        splunk-index: docker_logs
+        splunk-sourcetype: alertmanager
+        splunk-verify-connection: "false"
+        splunk-format: json
+        tag: alertmanager
   
 networks:
   monitoring:
