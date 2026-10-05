@@ -14,6 +14,7 @@ services:
       WEBTHEME: default-dark
       VIRTUAL_HOST: pihole.local
       FTLCONF_dns_hosts: |
+        192.168.1.100 proxmox.lan
         192.168.1.106 pihole.lan
         192.168.1.106 splunk.lan
         192.168.1.106 vaultwarden.lan
@@ -25,7 +26,6 @@ services:
         192.168.1.106 docker.lan
         192.168.1.106 homepage.lan
         192.168.1.106 ntfy.lan
-        192.168.1.106 proxmox.lan
         192.168.1.106 prometheus.lan
         192.168.1.106 alertmanager.lan
         192.168.1.106 nextcloud.lan
