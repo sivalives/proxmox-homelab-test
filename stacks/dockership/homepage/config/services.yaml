@@ -91,7 +91,7 @@
           #under ntfy custom api, we can use the ntfy API to fetch recent messages from a specific topic and display them in a dynamic list format. The configuration below specifies the URL of the ntfy server, the topic to fetch messages from, the HTTP method to use, the refresh interval for fetching new messages, and how to map the response data to display the message title and content.
           url: http://192.168.1.108:5000/notifications?topic=proxmox_alerts
           method: GET
-          refreshInterval: 5000
+          refreshInterval: 60000
           display: dynamic-list
           mappings:
             items: data
@@ -108,7 +108,7 @@
           #under ntfy custom api, we can use the ntfy API to fetch recent messages from a specific topic and display them in a dynamic list format. The configuration below specifies the URL of the ntfy server, the topic to fetch messages from, the HTTP method to use, the refresh interval for fetching new messages, and how to map the response data to display the message title and content.
           url: http://192.168.1.108:5000/notifications?topic=docker_alerts
           method: GET
-          refreshInterval: 5000
+          refreshInterval: 60000
           display: dynamic-list
           mappings:
             items: data
@@ -125,7 +125,7 @@
           #under ntfy custom api, we can use the ntfy API to fetch recent messages from a specific topic and display them in a dynamic list format. The configuration below specifies the URL of the ntfy server, the topic to fetch messages from, the HTTP method to use, the refresh interval for fetching new messages, and how to map the response data to display the message title and content.
           url: http://192.168.1.108:5000/notifications?topic=system_alerts
           method: GET
-          refreshInterval: 5000
+          refreshInterval: 60000
           display: dynamic-list
           mappings:
             items: data
