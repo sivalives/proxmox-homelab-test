@@ -1,7 +1,7 @@
 services:
 
   minio-s3:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: lakehouse-minio
     hostname: minio
     restart: unless-stopped
