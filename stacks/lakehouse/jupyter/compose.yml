@@ -1,0 +1,30 @@
+services:
+
+  jupyter:
+    image: quay.io/jupyter/pyspark-notebook:latest
+    container_name: jupyter
+    hostname: jupyter
+    restart: unless-stopped
+
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+
+      # S3 / MinIO
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: us-east-1
+
+      # Spark
+      SPARK_MASTER: spark://spark:7077
+
+    ports:
+      - "8888:8888"
+
+    volumes:
+      - /opt/lakehouse-data/jupyter:/home/jovyan/work
+
+    command: >
+      start-notebook.py
+      --ServerApp.ip=0.0.0.0
+      --ServerApp.port=8888
+      --ServerApp.allow_root=True

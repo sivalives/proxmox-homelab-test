@@ -1,0 +1,3 @@
+# ansible/host_vars/lakehouse.yml
+hawser_openbao_path: "secret/lakehouse"
+docker_data_mount: /opt/lakehouse-data
