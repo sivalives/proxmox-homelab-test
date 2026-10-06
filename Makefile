@@ -2,6 +2,7 @@
 
 .PHONY: help bootstrap \
         openbao-server-setup openbao-app-setup openbao-agent \
+        new-lxc-setup \
         lxc-bootstrap docker-setup hawser-setup docker-exporter-setup \
         tailscale-setup deploy-stack \
         terraform-init plan apply destroy deploy clean
@@ -12,6 +13,7 @@
 
 STACK ?=
 APP ?=
+OPENBAO_DIR ?=
 
 ROOT_DIR := $(CURDIR)
 ANSIBLE_DIR := $(ROOT_DIR)/ansible
@@ -53,12 +55,24 @@ help:
 	@echo "  make <target> STACK=<stack_name>"
 	@echo ""
 	@echo "=================================================="
+	@echo " New LXC / New Stack (start here)"
+	@echo "=================================================="
+	@echo "  make new-lxc-setup STACK=<stack_name>"
+	@echo "      Everything for a brand-new stack, in order:"
+	@echo "        git pull -> terraform apply -> lxc-bootstrap -> docker"
+	@echo "        -> openbao-app-setup -> openbao-agent -> hawser"
+	@echo "        -> docker-exporter -> tailscale (pihole only) -> deploy-stack"
+	@echo ""
+	@echo "  make deploy STACK=<stack_name>"
+	@echo "      Same as new-lxc-setup (full deployment)"
+	@echo ""
+	@echo "=================================================="
 	@echo " OpenBao"
 	@echo "=================================================="
 	@echo "  make openbao-server-setup"
 	@echo "      Full OpenBao server setup"
 	@echo ""
-	@echo "  make bootstrap"
+	@echo "  make bootstrap OPENBAO_DIR=<path>"
 	@echo "      Legacy OpenBao bootstrap"
 	@echo ""
 	@echo "  make openbao-app-setup APP=<app_name>"
@@ -107,10 +121,10 @@ help:
 	@echo " Deployment"
 	@echo "=================================================="
 	@echo "  make deploy STACK=ai"
-	@echo "      Full deployment of stack"
+	@echo "      Full deployment of stack (runs new-lxc-setup)"
 	@echo ""
 	@echo "  make deploy STACK=ai APP=ollama"
-	@echo "      Deploy only ollama"
+	@echo "      Deploy only ollama (git pull + deploy-stack)"
 	@echo ""
 	@echo "  make deploy STACK=dockership APP=dockhand"
 	@echo "      Deploy only dockhand"
@@ -123,10 +137,11 @@ help:
 	@echo ""
 
 # -------------------------------------------------------------------
-# OpenBao Bootstrap (legacy - kept as-is)
+# OpenBao Bootstrap (legacy - kept as-is, but now guards OPENBAO_DIR)
 # -------------------------------------------------------------------
 
 bootstrap:
+	$(call require,OPENBAO_DIR,make bootstrap OPENBAO_DIR=<path>)
 	@echo "Starting OpenBao Bootstrap..."
 	cd $(OPENBAO_DIR) && ./00-bootstrap-openbao.sh
 
@@ -141,11 +156,11 @@ openbao-server-setup:
 	@echo "=================================================="
 	@echo ""
 
-	@echo ">>> Step 1/8: Pull latest Git changes"
+	@echo ">>> Step 1/5: Pull latest Git changes"
 	cd $(ROOT_DIR) && git pull --ff-only
 
 	@echo ""
-	@echo ">>> Step 2/8: Terraform apply"
+	@echo ">>> Step 2/5: Terraform apply"
 	cd $(TERRAFORM_DIR)/openbao && terraform apply
 
 	@echo ""
@@ -153,17 +168,17 @@ openbao-server-setup:
 	sleep 10
 
 	@echo ""
-	@echo ">>> Step 3/8: LXC bootstrap"
+	@echo ">>> Step 3/5: LXC bootstrap"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
 		-e stack_name=openbao
 
 	@echo ""
-	@echo ">>> Step 4/8: Docker setup"
+	@echo ">>> Step 4/5: Docker setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
 		-e stack_name=openbao
 
 	@echo ""
-	@echo ">>> Step 5/8: OpenBao server setup"
+	@echo ">>> Step 5/5: OpenBao server setup"
 	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-server-setup.yml
 
 	@echo ""
@@ -229,7 +244,7 @@ openbao-agent:
 	fi
 
 # -------------------------------------------------------------------
-# Individual Ansible Playbooks
+# Individual Ansible Playbooks (unchanged)
 # -------------------------------------------------------------------
 
 # -------------------------------------------------------------------
@@ -401,12 +416,111 @@ apply: terraform-init
 	(cd $(TERRAFORM_DIR)/$(STACK) && terraform apply)
 
 # -------------------------------------------------------------------
+# New LXC Setup - runs EVERY playbook, in dependency order.
+#
+#   1  git pull
+#   2  terraform apply          (creates the LXC)
+#   3  lxc-bootstrap.yml
+#   4  docker.yml
+#   5  openbao-app-setup.yml    (creates policy/secret/AppRole; APP = STACK)
+#   6  openbao-agent-setup.yml  (needs the AppRole creds from step 5)
+#   7  hawser.yml
+#   8  docker-exporter.yml
+#   9  tailscale-setup.yml      (pihole only)
+#   10 deploy-stack.yml
+#
+# Each step is its own recipe line, so make aborts on the first failure.
+# -------------------------------------------------------------------
+
+new-lxc-setup:
+	$(call require,STACK,make new-lxc-setup STACK=<stack_name>)
+	@if [ "$(STACK)" = "openbao" ]; then \
+		echo "ERROR: STACK=openbao is the secrets server itself."; \
+		echo "Use: make openbao-server-setup"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(TERRAFORM_DIR)/$(STACK)" ]; then \
+		echo "ERROR: No Terraform stack found at $(TERRAFORM_DIR)/$(STACK)"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "=================================================="
+	@echo " New LXC Setup (all playbooks)"
+	@echo " Stack: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+	@echo ">>> Step 1/10: Pull latest Git changes"
+	cd $(ROOT_DIR) && git pull --ff-only
+
+	@echo ""
+	@echo ">>> Step 2/10: Terraform init + apply"
+	cd $(TERRAFORM_DIR)/$(STACK) && terraform init && terraform apply
+
+	@echo ""
+	@echo ">>> Waiting for LXC to become available..."
+	sleep 10
+
+	@echo ""
+	@echo ">>> Step 3/10: LXC bootstrap"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 4/10: Docker setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 5/10: OpenBao app setup (policy + AppRole for $(STACK))"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/openbao-app-setup.yml \
+		-e app_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 6/10: OpenBao agent install (CLI + credentials)"
+	$(MAKE) --no-print-directory openbao-agent STACK=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 7/10: Hawser Agent setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 8/10: Docker exporter setup"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker-exporter.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo ">>> Step 9/10: Tailscale setup"
+	@if [ "$(STACK)" = "pihole" ]; then \
+		echo "Configuring Tailscale on Pi-hole..."; \
+		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
+			-e stack_name=$(STACK); \
+	else \
+		echo "Tailscale is only configured on pihole - skipping."; \
+	fi
+
+	@echo ""
+	@echo ">>> Step 10/10: Deploy stack"
+	$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
+		-e stack_name=$(STACK)
+
+	@echo ""
+	@echo "=================================================="
+	@echo " New LXC setup complete: $(STACK)"
+	@echo "=================================================="
+	@echo ""
+
+# -------------------------------------------------------------------
 # Deploy
+#   APP set   -> git pull + deploy only that app
+#   APP empty -> full deployment (= new-lxc-setup)
 # -------------------------------------------------------------------
 
 deploy:
 	$(call require,STACK,make deploy STACK=<stack_name> [APP=<app_name>])
 	@if [ -n "$(APP)" ]; then \
+		set -e; \
 		echo ""; \
 		echo "=================================================="; \
 		echo " Application Deployment"; \
@@ -428,53 +542,7 @@ deploy:
 		echo " App:   $(APP)"; \
 		echo "=================================================="; \
 	else \
-		echo ""; \
-		echo "=================================================="; \
-		echo " Full Deployment: $(STACK)"; \
-		echo " Applications: ALL"; \
-		echo "=================================================="; \
-		echo ""; \
-		echo ">>> Step 1/8: Pull latest Git changes"; \
-		cd $(ROOT_DIR) && git pull --ff-only; \
-		echo ""; \
-		echo ">>> Step 2/8: Terraform apply"; \
-		(cd $(TERRAFORM_DIR)/$(STACK) && terraform apply); \
-		echo ""; \
-		echo ">>> Waiting for LXC to become available..."; \
-		sleep 10; \
-		echo ""; \
-		echo ">>> Step 3/8: LXC bootstrap"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/lxc-bootstrap.yml \
-			-e stack_name=$(STACK); \
-		echo ""; \
-		echo ">>> Step 4/8: Docker setup"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/docker.yml \
-			-e stack_name=$(STACK); \
-		echo ""; \
-		echo ">>> Step 5/8: OpenBao agent install (CLI + credentials)"; \
-		$(MAKE) --no-print-directory openbao-agent STACK=$(STACK); \
-		echo ""; \
-		echo ">>> Step 6/8: Hawser Agent setup"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/hawser.yml \
-			-e stack_name=$(STACK); \
-		echo ""; \
-		echo ">>> Step 7/8: Tailscale setup"; \
-		if [ "$(STACK)" = "pihole" ]; then \
-			echo "Configuring Tailscale on Pi-hole..."; \
-			$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/tailscale-setup.yml \
-				-e stack_name=$(STACK); \
-		else \
-			echo "Tailscale is only configured on pihole - skipping."; \
-		fi; \
-		echo ""; \
-		echo ">>> Step 8/8: Deploy stack"; \
-		$(ANSIBLE_PLAYBOOK) $(ANSIBLE_DIR)/playbooks/deploy-stack.yml \
-			-e stack_name=$(STACK); \
-		echo ""; \
-		echo "=================================================="; \
-		echo " Full deployment complete: $(STACK)"; \
-		echo " Applications deployed: ALL"; \
-		echo "=================================================="; \
+		$(MAKE) --no-print-directory new-lxc-setup STACK=$(STACK); \
 	fi
 
 # -------------------------------------------------------------------
