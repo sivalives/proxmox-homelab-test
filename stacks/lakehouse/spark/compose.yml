@@ -1,7 +1,7 @@
 services:
 
   spark:
-    image: bitnami/spark:latest
+    image: spark:4.2.0-python3
     container_name: lakehouse-spark
     hostname: spark
     restart: unless-stopped
