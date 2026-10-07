@@ -25,32 +25,34 @@ services:
     networks:
       - lakehouse
 
-  spark-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: lakehouse-spark:4.2.0-python3.13
-    container_name: lakehouse-spark-worker
-    hostname: spark-worker
-    restart: unless-stopped
+spark-worker:
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: lakehouse-spark:4.2.0-python3.13
+  container_name: lakehouse-spark-worker
+  hostname: spark-worker
+  restart: unless-stopped
 
-    environment:
-      PYSPARK_PYTHON: /usr/bin/python3.13
+  environment:
+    PYSPARK_PYTHON: /usr/bin/python3.13
+    PYSPARK_DRIVER_PYTHON: /usr/bin/python3.13
+    PYTHONPATH: /opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip
 
-    command:
-      - /opt/spark/bin/spark-class
-      - org.apache.spark.deploy.worker.Worker
-      - spark://spark:7077
+  command:
+    - /opt/spark/bin/spark-class
+    - org.apache.spark.deploy.worker.Worker
+    - spark://spark:7077
 
-    depends_on:
-      - spark-master
+  depends_on:
+    - spark-master
 
-    volumes:
-      - /opt/lakehouse-data/spark:/opt/spark/work
+  volumes:
+    - /opt/lakehouse-data/spark:/opt/spark/work
 
-    networks:
-      - lakehouse
-
+  networks:
+    - lakehouse
+    
 networks:
   lakehouse:
     external: true
