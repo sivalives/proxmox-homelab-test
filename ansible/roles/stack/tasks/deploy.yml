@@ -212,9 +212,9 @@
     mode: "{{ item.mode }}"
   loop: "{{ app_storage | default([]) }}"
 
-- name: Deploy with Docker Compose
+- name: Deploy with Docker Compose - Rebuild and recreate containers
   ansible.builtin.command:
-    cmd: docker compose up -d --force-recreate
+    cmd: docker compose up -d --build --force-recreate --remove-orphans
     chdir: "{{ compose_dir }}"
   register: compose_up
   changed_when: compose_up.rc == 0
