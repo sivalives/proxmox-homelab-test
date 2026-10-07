@@ -31,3 +31,7 @@ services:
       - --ServerApp.ip=0.0.0.0
       - --ServerApp.port=8888
       - --ServerApp.open_browser=False
+      
+networks:
+  lakehouse:
+    name: lakehouse
