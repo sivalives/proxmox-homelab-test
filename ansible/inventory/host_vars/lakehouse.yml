@@ -18,3 +18,8 @@ app_storage:
     owner: "185"
     group: "185"
     mode: "0750"
+
+  - path: "{{ docker_data_mount }}/jupyter"
+    owner: "1000"
+    group: "100"
+    mode: "0750"

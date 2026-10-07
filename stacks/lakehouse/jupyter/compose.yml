@@ -26,6 +26,7 @@ services:
     volumes:
       - /opt/lakehouse-data/jupyter:/home/jovyan/work
       - ./jupyter_server_config.py:/home/jovyan/.jupyter/jupyter_server_config.py:ro
+      - ./notebooks:/home/jovyan/work/notebooks:ro
 
     command:
       - start-notebook.py
