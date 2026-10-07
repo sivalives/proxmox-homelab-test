@@ -3,22 +3,19 @@ FROM spark:4.2.0-python3
 USER root
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends wget ca-certificates \
+    && apt-get install -y --no-install-recommends \
+       software-properties-common \
+       ca-certificates \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       python3.13 \
+       python3.13-venv \
+       python3.13-distutils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    -O /tmp/miniconda.sh \
-    && bash /tmp/miniconda.sh -b -p /opt/conda \
-    && rm -f /tmp/miniconda.sh
+RUN python3.13 --version
 
-ENV PATH=/opt/conda/bin:$PATH
-
-RUN conda config --system --remove-key channels \
-    && conda config --system --add channels conda-forge \
-    && conda config --system --set channel_priority strict \
-    && conda install -y python=3.13 \
-    && conda clean -afy
-
-ENV PYSPARK_PYTHON=/opt/conda/bin/python
+ENV PYSPARK_PYTHON=/usr/bin/python3.13
 
 USER spark
