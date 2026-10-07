@@ -1,7 +1,10 @@
 services:
 
   spark-master:
-    image: spark:4.2.0-python3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lakehouse-spark:4.2.0-python3.13
     container_name: lakehouse-spark-master
     hostname: spark
     restart: unless-stopped
@@ -23,10 +26,16 @@ services:
       - lakehouse
 
   spark-worker:
-    image: spark:4.2.0-python3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lakehouse-spark:4.2.0-python3.13
     container_name: lakehouse-spark-worker
     hostname: spark-worker
     restart: unless-stopped
+
+    environment:
+      PYSPARK_PYTHON: /opt/conda/bin/python
 
     command:
       - /opt/spark/bin/spark-class
