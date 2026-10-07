@@ -1,0 +1,4 @@
+delta-spark
+boto3
+pandas
+pyarrow

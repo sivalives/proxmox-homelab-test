@@ -1,6 +1,11 @@
 services:
   jupyter:
-    image: quay.io/jupyter/pyspark-notebook:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: lakehouse-jupyter:latest
+
     container_name: lakehouse-jupyter
     hostname: jupyter
     restart: unless-stopped
@@ -10,13 +15,9 @@ services:
 
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-
-      # RustFS / S3 credentials
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       AWS_DEFAULT_REGION: us-east-1
-
-      # Spark
       SPARK_MASTER: spark://spark:7077
 
     ports:
@@ -31,7 +32,7 @@ services:
       - --ServerApp.ip=0.0.0.0
       - --ServerApp.port=8888
       - --ServerApp.open_browser=False
-      
+
     networks:
       - lakehouse
 
