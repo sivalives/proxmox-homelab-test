@@ -1,7 +1,8 @@
 services:
-  spark:
+
+  spark-master:
     image: spark:4.2.0-python3
-    container_name: lakehouse-spark
+    container_name: lakehouse-spark-master
     hostname: spark
     restart: unless-stopped
 
@@ -17,8 +18,31 @@ services:
 
     volumes:
       - /opt/lakehouse-data/spark:/opt/spark/work
+
     networks:
       - lakehouse
+
+
+  spark-worker:
+    image: spark:4.2.0-python3
+    container_name: lakehouse-spark-worker
+    hostname: spark-worker
+    restart: unless-stopped
+
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark:7077
+
+    depends_on:
+      - spark-master
+
+    volumes:
+      - /opt/lakehouse-data/spark:/opt/spark/work
+
+    networks:
+      - lakehouse
+
 
 networks:
   lakehouse:
