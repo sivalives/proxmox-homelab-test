@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    image: lakehouse-jupyter:latest
+    image: lakehouse-jupyter:python3.10
 
     container_name: lakehouse-jupyter
     hostname: jupyter
