@@ -1,21 +1,19 @@
 services:
-
   spark:
     image: spark:4.2.0-python3
     container_name: lakehouse-spark
     hostname: spark
     restart: unless-stopped
 
-    environment:
-      SPARK_MODE: master
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
-      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
-      SPARK_SSL_ENABLED: "no"
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark
 
     ports:
       - "7077:7077"
       - "8080:8080"
 
     volumes:
-      - /opt/lakehouse-data/spark:/opt/bitnami/spark/data
+      - /opt/lakehouse-data/spark:/opt/spark/work
