@@ -11,7 +11,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        python3.13 \
        python3.13-venv \
-       python3.13-distutils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3.13 --version
