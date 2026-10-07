@@ -17,6 +17,8 @@ services:
 
     volumes:
       - /opt/lakehouse-data/spark:/opt/spark/work
+    networks:
+      - lakehouse
 
 networks:
   lakehouse:
