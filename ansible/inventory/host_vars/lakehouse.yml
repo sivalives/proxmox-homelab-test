@@ -1,3 +1,15 @@
 # ansible/host_vars/lakehouse.yml
 hawser_openbao_path: "secret/lakehouse"
 docker_data_mount: /opt/lakehouse-data
+
+# Persistent application data
+app_storage:
+  - path: "{{ docker_data_mount }}/rustfs"
+    owner: "10001"
+    group: "10001"
+    mode: "0750"
+
+  - path: "{{ docker_data_mount }}/rustfs-logs"
+    owner: "10001"
+    group: "10001"
+    mode: "0750"
