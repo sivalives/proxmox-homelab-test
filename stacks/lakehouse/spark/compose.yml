@@ -20,4 +20,4 @@ services:
 
 networks:
   lakehouse:
-    name: lakehouse
+    external: true
