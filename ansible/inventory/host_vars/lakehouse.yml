@@ -13,3 +13,8 @@ app_storage:
     owner: "10001"
     group: "10001"
     mode: "0750"
+
+  - path: "{{ docker_data_mount }}/spark"
+    owner: "185"
+    group: "185"
+    mode: "0750"
