@@ -32,6 +32,10 @@ services:
       - --ServerApp.port=8888
       - --ServerApp.open_browser=False
       
+    networks:
+      - lakehouse
+
 networks:
   lakehouse:
+    external: true
     name: lakehouse

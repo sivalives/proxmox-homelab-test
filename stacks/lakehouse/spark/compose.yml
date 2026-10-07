@@ -22,7 +22,6 @@ services:
     networks:
       - lakehouse
 
-
   spark-worker:
     image: spark:4.2.0-python3
     container_name: lakehouse-spark-worker
@@ -43,7 +42,7 @@ services:
     networks:
       - lakehouse
 
-
 networks:
   lakehouse:
     external: true
+    name: lakehouse
