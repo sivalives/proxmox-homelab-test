@@ -13,7 +13,10 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
 
 ENV PATH=/opt/conda/bin:$PATH
 
-RUN conda install -y python=3.13 \
+RUN conda config --system --remove-key channels \
+    && conda config --system --add channels conda-forge \
+    && conda config --system --set channel_priority strict \
+    && conda install -y python=3.13 \
     && conda clean -afy
 
 ENV PYSPARK_PYTHON=/opt/conda/bin/python
