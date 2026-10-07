@@ -35,7 +35,8 @@ services:
     restart: unless-stopped
 
     environment:
-      PYSPARK_PYTHON: /opt/conda/bin/python
+    PYSPARK_PYTHON: /usr/bin/python3.13
+
 
     command:
       - /opt/spark/bin/spark-class
