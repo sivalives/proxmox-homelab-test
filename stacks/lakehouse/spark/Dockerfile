@@ -13,8 +13,10 @@ RUN apt-get update \
        python3.13-venv \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3.13 --version
-
 ENV PYSPARK_PYTHON=/usr/bin/python3.13
+ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3.13
+ENV PYTHONPATH=/opt/spark/python/lib/pyspark.zip:/opt/spark/python/lib/py4j-0.10.9.9-src.zip
+
+RUN /usr/bin/python3.13 --version
 
 USER spark
