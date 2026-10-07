@@ -10,20 +10,24 @@ services:
 
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-      JUPYTER_TOKEN: ""
-      JUPYTER_PASSWORD_HASH: ${JUPYTER_PASSWORD_HASH}
 
+      # RustFS / S3 credentials
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       AWS_DEFAULT_REGION: us-east-1
+
+      # Spark
+      SPARK_MASTER: spark://spark:7077
 
     ports:
       - "8888:8888"
 
     volumes:
       - /opt/lakehouse-data/jupyter:/home/jovyan/work
+      - ./jupyter_server_config.py:/home/jovyan/.jupyter/jupyter_server_config.py:ro
 
     command:
       - start-notebook.py
       - --ServerApp.ip=0.0.0.0
       - --ServerApp.port=8888
+      - --ServerApp.open_browser=False
